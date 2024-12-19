@@ -5,7 +5,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"rhyus-golang/common"
+	"rhyus-golang/conf"
 	"rhyus-golang/model"
+	"rhyus-golang/util"
 	"time"
 )
 
@@ -32,7 +34,7 @@ func Recover(c *gin.Context) {
 	defer func() {
 		if e := recover(); nil != e {
 			common.Log.RecoverError(e)
-			c.AbortWithStatusJSON(http.StatusInternalServerError, model.Fail(fmt.Sprintf("%v", e)))
+			model.Fail(c, fmt.Sprintf("%v", e))
 		}
 	}()
 	c.Next()
@@ -58,5 +60,18 @@ func CorsMiddleware(c *gin.Context) {
 
 // Authorize 鉴权
 func Authorize(c *gin.Context) {
+	apiKey := util.GetApiKey(c)
+	common.Log.Debug("apiKey: %s", apiKey)
+	if apiKey == "" {
+		model.Forbidden(c)
+	} else if apiKey != conf.Conf.ApiKey {
+		userInfo := util.GetUserInfo(apiKey)
+		if userInfo == nil {
+			model.Forbidden(c)
+			return
+		}
+		c.Set("userInfo", userInfo)
+	}
+
 	c.Next()
 }

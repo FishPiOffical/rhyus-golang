@@ -26,6 +26,7 @@ func main() {
 	api.ServeAPI(ginServer)
 
 	addr := conf.Conf.Host + ":" + strconv.Itoa(conf.Conf.Port)
+	common.Log.Info("server start at: %s", addr)
 	if conf.Conf.Ssl.Enabled {
 		err := ginServer.RunTLS(addr, conf.Conf.Ssl.CertPath, conf.Conf.Ssl.KeyPath)
 		if err != nil {

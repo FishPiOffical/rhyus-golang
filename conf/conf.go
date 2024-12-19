@@ -11,11 +11,12 @@ import (
 )
 
 type AppConf struct {
-	Host string `json:"host,omitempty"`
-	Port int    `json:"port,omitempty"`
-	Ssl  *Ssl   `json:"ssl"`
-
-	LogLevel string `json:"log_level"`
+	Host      string `json:"host,omitempty"`
+	Port      int    `json:"port,omitempty"`
+	Ssl       *Ssl   `json:"ssl"`
+	MasterUrl string `json:"masterUrl"`
+	ApiKey    string `json:"apiKey"`
+	LogLevel  string `json:"log_level"`
 
 	m *sync.Mutex
 }
@@ -39,6 +40,8 @@ func InitConf() {
 	ssl := flag.Bool("ssl", false, "enable SSL")
 	certPath := flag.String("cert-path", "", "path of SSL certificate")
 	keyPath := flag.String("key-path", "", "path of SSL key")
+	masterUrl := flag.String("master-url", "https://fishpi.cn", "master server URL")
+	apiKey := flag.String("api-key", "", "api key")
 	logLevel := flag.String("log-level", "debug", "log level")
 	flag.Parse()
 
@@ -55,7 +58,9 @@ func InitConf() {
 			CertPath: *certPath,
 			KeyPath:  *keyPath,
 		},
-		m: &sync.Mutex{},
+		MasterUrl: *masterUrl,
+		ApiKey:    *apiKey,
+		m:         &sync.Mutex{},
 	}
 	ConfigPath = filepath.Join(workSpace, "conf.json")
 	if common.File.IsExist(ConfigPath) {
