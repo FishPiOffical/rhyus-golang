@@ -28,7 +28,7 @@ func GetUserInfo(apiKey string) *model.UserInfo {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		common.Log.Error("Request failed with status: %d", resp.Status)
+		common.Log.Error("Request failed with status: %s", resp.Status)
 		return nil
 	}
 
@@ -66,7 +66,7 @@ func PostMessageToMaster(adminKey string, msg string, data string) {
 	}
 	resp, err := http.Post(conf.Conf.MasterUrl+"/chat-room/node/push", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		common.Log.Error("get user info failed: %s", err)
+		common.Log.Error("post message to master failed: %s", err)
 		return
 	}
 	defer func(Body io.ReadCloser) {

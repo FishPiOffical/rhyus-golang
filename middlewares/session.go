@@ -64,7 +64,7 @@ func Authorize(c *gin.Context) {
 	common.Log.Debug("apiKey: %s", apiKey)
 	if apiKey == "" {
 		model.Forbidden(c)
-	} else if apiKey != conf.Conf.ApiKey {
+	} else if apiKey != conf.Conf.AdminKey {
 		userInfo := util.GetUserInfo(apiKey)
 		if userInfo == nil {
 			model.Forbidden(c)
