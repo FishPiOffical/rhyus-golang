@@ -83,7 +83,7 @@ func sendMessageToMaster() {
 		if err != nil {
 			// Connection abnormal closed
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				common.Log.Error("conn abnormal closed by %s", err)
+				common.Log.Error("conn %s closed by %s", Hub.masterNode.RemoteAddr().String(), err)
 			} else {
 				common.Log.Error("send message to master node failed: %s", err)
 			}
@@ -95,19 +95,19 @@ func sendMessageToMaster() {
 func (h *webSocketHub) SetMasterNode(conn *websocket.Conn) {
 	h.masterNode = conn
 
-	err := conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	err := conn.SetReadDeadline(time.Now().Add(600 * time.Second))
 	if err != nil {
 		common.Log.Error("set read deadline failed: %s", err)
 		return
 	}
-	conn.SetPongHandler(func(appData string) error {
-		err := conn.SetReadDeadline(time.Now().Add(60 * time.Second))
-		if err != nil {
-			common.Log.Error("set read deadline failed: %s", err)
-			return err
-		}
-		return nil
-	})
+	//conn.SetPongHandler(func(appData string) error {
+	//	err := conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	//	if err != nil {
+	//		common.Log.Error("set read deadline failed: %s", err)
+	//		return err
+	//	}
+	//	return nil
+	//})
 
 	go func() {
 		for {
@@ -116,9 +116,14 @@ func (h *webSocketHub) SetMasterNode(conn *websocket.Conn) {
 				// Connection abnormal closed
 				common.Log.Info("master node closed: %s", conn.RemoteAddr().String())
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					common.Log.Error("conn abnormal closed by %s", err)
+					common.Log.Error("conn %s closed by %s", conn.RemoteAddr().String(), err)
 				} else {
 					common.Log.Error("read message failed: %s", err)
+				}
+				err := conn.Close()
+				if err != nil {
+					common.Log.Error("close conn failed: %s", err)
+					return
 				}
 				return
 			}
@@ -164,7 +169,7 @@ func (h *webSocketHub) HandleMasterNodeMessage() {
 												// Connection abnormal closed
 												h.Unregister <- conn
 												if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-													common.Log.Error("conn abnormal closed by %s", err)
+													common.Log.Error("conn %s closed by %s", conn.RemoteAddr().String(), err)
 												} else {
 													common.Log.Error("send message to %s's client failed: %s", user.UserName, err)
 												}
@@ -186,7 +191,7 @@ func (h *webSocketHub) HandleMasterNodeMessage() {
 												// Connection abnormal closed
 												h.Unregister <- conn
 												if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-													common.Log.Error("conn abnormal closed by %s", err)
+													common.Log.Error("conn %s closed by %s", conn.RemoteAddr().String(), err)
 												} else {
 													common.Log.Error("send message to %s's client failed: %s", user.UserName, err)
 												}
@@ -204,7 +209,7 @@ func (h *webSocketHub) HandleMasterNodeMessage() {
 												// Connection abnormal closed
 												h.Unregister <- conn
 												if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-													common.Log.Error("conn abnormal closed by %s", err)
+													common.Log.Error("conn %s closed by %s", conn.RemoteAddr().String(), err)
 												} else {
 													common.Log.Error("send message to %s's client failed: %s", user.UserName, err)
 												}
@@ -225,7 +230,7 @@ func (h *webSocketHub) HandleMasterNodeMessage() {
 											// Connection abnormal closed
 											h.Unregister <- conn
 											if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-												common.Log.Error("conn abnormal closed by %s", err)
+												common.Log.Error("conn %s closed by %s", conn.RemoteAddr().String(), err)
 											} else {
 												common.Log.Error("send message to %s's client failed: %s", user.UserName, err)
 											}
@@ -245,7 +250,7 @@ func (h *webSocketHub) HandleMasterNodeMessage() {
 											// Connection abnormal closed
 											h.Unregister <- conn
 											if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-												common.Log.Error("conn abnormal closed by %s", err)
+												common.Log.Error("conn %s closed by %s", conn.RemoteAddr().String(), err)
 											} else {
 												common.Log.Error("send message to %s's client failed: %s", user.UserName, err)
 											}
@@ -254,15 +259,15 @@ func (h *webSocketHub) HandleMasterNodeMessage() {
 										return true
 									})
 								} else if command == "online" {
-									onlineUsersSet := make(map[*activeUser]struct{})
+									onlineUsersSet := make(map[string]*model.UserInfo)
 									h.clients.Range(func(key, value any) bool {
 										user := value.(*activeUser)
-										onlineUsersSet[user] = struct{}{}
+										onlineUsersSet[user.UserInfo.OId] = user.UserInfo
 										return true
 									})
-									onlineUsers := make([]*activeUser, len(onlineUsersSet))
-									for user := range onlineUsersSet {
-										onlineUsers = append(onlineUsers, user)
+									onlineUsers := make([]*model.UserInfo, 0)
+									for _, userInfo := range onlineUsersSet {
+										onlineUsers = append(onlineUsers, userInfo)
 									}
 
 									common.Log.Info("online: %d", len(onlineUsersSet))
@@ -319,7 +324,7 @@ func (h *webSocketHub) HandleMasterNodeMessage() {
 func (h *webSocketHub) AddClient(conn *websocket.Conn, userInfo *model.UserInfo) {
 	user := &activeUser{
 		UserInfo:   userInfo,
-		LastActive: time.Time{},
+		LastActive: time.Now(),
 	}
 	h.clients.LoadOrStore(conn, user)
 }

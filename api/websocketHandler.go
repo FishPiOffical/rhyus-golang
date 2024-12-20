@@ -50,7 +50,7 @@ func ChatroomWebSocket(c *gin.Context) {
 			// Connection abnormal closed
 			service.Hub.Unregister <- conn
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				common.Log.Error("conn abnormal closed by %s", err)
+				common.Log.Error("conn %s closed by %s", conn.RemoteAddr().String(), err)
 			} else {
 				common.Log.Error("send message to %s's client failed: %s", userInfo.(*model.UserInfo).UserName, err)
 			}

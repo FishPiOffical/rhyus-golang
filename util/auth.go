@@ -74,7 +74,7 @@ func PostMessageToMaster(adminKey string, msg string, data string) {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		common.Log.Error("Request failed with status: %d", resp.Status)
+		common.Log.Error("Request failed with status: %s", resp.Status)
 		return
 	}
 }
