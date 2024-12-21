@@ -45,7 +45,7 @@ func init() {
 		MasterNode:           make(chan *websocket.Conn, conf.Conf.MasterNodeCacheSize), // key:*websocket.Conn value:chan []byte
 		ClientNode:           make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 新连接
 		Unregister:           make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 断开连接
-		AllOnlineUsers:       "",                                                        // 所有在线用户
+		AllOnlineUsers:       "{}",                                                      // 所有在线用户
 		localOnlineUsernames: make(map[string]int, conf.Conf.ClientNodeCacheSize),       // key:username value:true
 	}
 
