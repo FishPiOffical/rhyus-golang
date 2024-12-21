@@ -23,7 +23,8 @@ type webSocketHub struct {
 	Unregister     chan *websocket.Conn // 断开连接的通道
 	AllOnlineUsers string               // 所有在线用户
 
-	mu sync.Mutex // 保护 clients 的并发安全
+	localOnlineUsernames map[string]int // 本地在线用户名
+	mu                   sync.Mutex     // 保护 localOnlineUsernames 的并发安全
 }
 
 type activeMaster struct {
@@ -39,12 +40,13 @@ type activeClient struct {
 
 func init() {
 	Hub = &webSocketHub{
-		masters:        sync.Map{},                                                // key:*websocket.Conn value:*activeMaster
-		clients:        sync.Map{},                                                // key:*websocket.Conn value:*activeClient
-		MasterNode:     make(chan *websocket.Conn, conf.Conf.MasterNodeCacheSize), // key:*websocket.Conn value:chan []byte
-		ClientNode:     make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 新连接
-		Unregister:     make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 断开连接
-		AllOnlineUsers: "",                                                        // 所有在线用户
+		masters:              sync.Map{},                                                // key:*websocket.Conn value:*activeMaster
+		clients:              sync.Map{},                                                // key:*websocket.Conn value:*activeClient
+		MasterNode:           make(chan *websocket.Conn, conf.Conf.MasterNodeCacheSize), // key:*websocket.Conn value:chan []byte
+		ClientNode:           make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 新连接
+		Unregister:           make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 断开连接
+		AllOnlineUsers:       "",                                                        // 所有在线用户
+		localOnlineUsernames: make(map[string]int, conf.Conf.ClientNodeCacheSize),       // key:username value:true
 	}
 
 	go Hub.unregisterHandler()
@@ -58,7 +60,14 @@ func (h *webSocketHub) unregisterHandler() {
 	userInfo := user.(*activeClient).UserInfo
 	if ok {
 		common.Log.Info("user %s has leaved: %s", userInfo.UserName, conn.RemoteAddr().String())
-		go util.PostMessageToMaster(conf.Conf.AdminKey, "leave", userInfo.UserName)
+		h.mu.Lock()
+		count := h.localOnlineUsernames[userInfo.UserName]
+		if count < 1 {
+			go util.PostMessageToMaster(conf.Conf.AdminKey, "leave", userInfo.UserName)
+		} else {
+			h.localOnlineUsernames[userInfo.UserName] = count - 1
+		}
+		h.mu.Unlock()
 	} else {
 		common.Log.Error("user %s leave failed: %s", userInfo.UserName, conn.RemoteAddr().String())
 	}
@@ -95,7 +104,15 @@ func (h *webSocketHub) clientHandler() {
 			userInfo := client.(*activeClient).UserInfo
 			if ok {
 				common.Log.Info("client %s has joined: %s", userInfo.UserName, conn.RemoteAddr().String())
-				go util.PostMessageToMaster(conf.Conf.AdminKey, "join", userInfo.UserName)
+				go func() {
+					h.mu.Lock()
+					count := h.localOnlineUsernames[userInfo.UserName]
+					if count < 1 {
+						util.PostMessageToMaster(conf.Conf.AdminKey, "join", userInfo.UserName)
+					}
+					h.localOnlineUsernames[userInfo.UserName] = count + 1
+					h.mu.Unlock()
+				}()
 				go func() {
 					for {
 						select {
@@ -232,7 +249,10 @@ func (h *webSocketHub) handleMasterMessage(connMaster *websocket.Conn, master *a
 								if err != nil {
 									common.Log.Error("marshal online users failed: %s", err)
 								}
-								common.Log.Info("[%s]: number %d list %s", command, len(onlineUsersSet), string(result))
+								common.Log.Info("[%s]: number %d list %s", command, len(onlineUsers), string(result))
+								if len(onlineUsers) == 0 {
+									result = []byte("[]")
+								}
 								master.MessageOutChan <- []byte(result)
 							} else if strings.HasPrefix(command, "push") {
 								content := strings.ReplaceAll(command, "push ", "")
