@@ -10,8 +10,6 @@ import (
 )
 
 func main() {
-	conf.InitConf()
-
 	gin.SetMode(gin.ReleaseMode)
 	ginServer := gin.New()
 	ginServer.UseH2C = true

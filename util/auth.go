@@ -57,7 +57,7 @@ func PostMessageToMaster(adminKey string, msg string, data string) {
 	requestData := chatroomNodePush{
 		Msg:      msg,
 		Data:     data,
-		AdminKey: adminKey,
+		AdminKey: conf.Conf.AdminKey,
 	}
 	jsonData, err := json.Marshal(requestData)
 	if err != nil {

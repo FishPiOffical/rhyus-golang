@@ -222,7 +222,6 @@ const (
 
 // initLogger initializes the logger.
 func (g *GuLog) initLogger(out io.Writer) {
-	level = DEBUG
 	logger = log.New(out, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 

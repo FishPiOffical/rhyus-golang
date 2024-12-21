@@ -9,6 +9,7 @@ import (
 	"rhyus-golang/model"
 	"rhyus-golang/service"
 	"rhyus-golang/util"
+	"time"
 )
 
 // websocket 升级并跨域
@@ -35,26 +36,15 @@ func ChatroomWebSocket(c *gin.Context) {
 	}
 
 	if util.GetApiKey(c) == conf.Conf.AdminKey {
-		// 主节点连接
-		common.Log.Info("master node connected: %s", conn.RemoteAddr().String())
-		service.Hub.SetMasterNode(conn)
-		service.Hub.HandleMasterNodeMessage()
+		// 服务端连接
+		service.Hub.AddMaster(conn)
+		service.Hub.MasterNode <- conn
 	} else {
 		// 客户端连接
 		userInfo, _ := c.Get("userInfo")
-		service.Hub.AddClient(conn, userInfo.(*model.UserInfo))
-		service.Hub.Register <- conn
+		client := service.Hub.AddClient(conn, userInfo.(*model.UserInfo))
+		service.Hub.ClientNode <- conn
 
-		err := conn.WriteMessage(websocket.TextMessage, []byte(service.Hub.AllOnlineUsers))
-		if err != nil {
-			// Connection abnormal closed
-			service.Hub.Unregister <- conn
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				common.Log.Error("conn %s closed by %s", conn.RemoteAddr().String(), err)
-			} else {
-				common.Log.Error("send message to %s's client failed: %s", userInfo.(*model.UserInfo).UserName, err)
-			}
-		}
-
+		client.MessageOutChan <- service.Message{Data: []byte(service.Hub.AllOnlineUsers), Delay: 2 * time.Second}
 	}
 }
