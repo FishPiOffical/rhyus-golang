@@ -11,6 +11,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -100,8 +101,15 @@ func (g *GuLog) openLogger() {
 	// Todo 临时解决日志文件过大的问题
 	if File.IsExist(LogPath) {
 		if size := File.GetFileSize(LogPath); 1024*1024*32 <= size {
-			// 日志文件大于 32M 的话删了重建
-			_ = os.Remove(LogPath)
+			// 日志文件大于 32M 的话重命名
+			timestamp := time.Now().Format("2006-01-02_15-04-05") // 获取当前时间戳格式化为字符串
+			newLogPath := fmt.Sprintf("%s.%s", LogPath, timestamp)
+
+			if err := os.Rename(LogPath, newLogPath); err != nil {
+				log.Printf("rename log file from [%s] to [%s] failed: %s", LogPath, newLogPath, err)
+			} else {
+				log.Printf("save log file to [%s] success", newLogPath)
+			}
 		}
 	}
 
