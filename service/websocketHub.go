@@ -145,6 +145,7 @@ func (h *webSocketHub) clientHandler() {
 				}()
 			} else {
 				common.Log.Error("client %s join failed: %s", userInfo.UserName, conn.RemoteAddr().String())
+				h.Unregister <- conn
 			}
 		}
 	}

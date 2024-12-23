@@ -13,6 +13,7 @@ import (
 type AppConf struct {
 	Host                   string `json:"host,omitempty"`
 	Port                   int    `json:"port,omitempty"`
+	PprofPort              int    `json:"pprofPort,omitempty"`
 	Ssl                    *Ssl   `json:"ssl,omitempty"`
 	MasterUrl              string `json:"masterUrl,omitempty"`
 	AdminKey               string `json:"adminKey,omitempty"`
@@ -20,7 +21,7 @@ type AppConf struct {
 	ClientNodeCacheSize    int    `json:"clientNodeCacheSize,omitempty"`
 	MasterMessageCacheSize int    `json:"masterMessageCacheSize,omitempty"`
 	ClientMessageCacheSize int    `json:"clientMessageCacheSize,omitempty"`
-	LogLevel               string `json:"log_level,omitempty"`
+	LogLevel               string `json:"logLevel,omitempty"`
 
 	m *sync.Mutex
 }
