@@ -186,125 +186,127 @@ func (h *webSocketHub) handleMasterMessage(connMaster *websocket.Conn, master *a
 	for {
 		select {
 		case message := <-master.MessageInChan:
-			msg := string(message)
-			if strings.Contains(msg, ":::") {
-				split := strings.Split(msg, ":::")
-				if len(split) == 2 {
-					if split[0] == conf.Conf.AdminKey {
-						command := split[1]
-						if command == "hello" {
-							common.Log.Info("[%s] from master %s", command, connMaster.RemoteAddr().String())
-							master.MessageOutChan <- []byte("hello from rhyus-golang")
-						} else if strings.HasPrefix(command, "tell") {
-							// 发送文本给指定用户
-							to := strings.Split(command, " ")[1]
-							content := strings.ReplaceAll(command, "tell "+to+" ", "")
-							common.Log.Info("[tell] to %s: %s", to, content)
-							h.clients.Range(func(key, value any) bool {
-								client := value.(*activeClient)
-								if client.UserInfo.UserName == to {
-									client.MessageOutChan <- Message{Data: []byte(content)}
-								}
-								return true
-							})
-						} else if strings.HasPrefix(command, "msg") {
-							// 广播文本：指定发送者先收到消息
-							sender := strings.Split(command, " ")[1]
-							content := strings.ReplaceAll(command, "msg "+sender+" ", "")
-							common.Log.Info("[%s] %s: %s", command, sender, content)
-							h.clients.Range(func(key, value any) bool {
-								client := value.(*activeClient)
-								if client.UserInfo.UserName == sender {
-									client.MessageOutChan <- Message{Data: []byte(content)}
-								}
-								return true
-							})
+			go func() {
+				msg := string(message)
+				if strings.Contains(msg, ":::") {
+					split := strings.Split(msg, ":::")
+					if len(split) == 2 {
+						if split[0] == conf.Conf.AdminKey {
+							command := split[1]
+							if command == "hello" {
+								common.Log.Info("[%s] from master %s", command, connMaster.RemoteAddr().String())
+								master.MessageOutChan <- []byte("hello from rhyus-golang")
+							} else if strings.HasPrefix(command, "tell") {
+								// 发送文本给指定用户
+								to := strings.Split(command, " ")[1]
+								content := strings.ReplaceAll(command, "tell "+to+" ", "")
+								common.Log.Info("[tell] to %s: %s", to, content)
+								h.clients.Range(func(key, value any) bool {
+									client := value.(*activeClient)
+									if client.UserInfo.UserName == to {
+										client.MessageOutChan <- Message{Data: []byte(content)}
+									}
+									return true
+								})
+							} else if strings.HasPrefix(command, "msg") {
+								// 广播文本：指定发送者先收到消息
+								sender := strings.Split(command, " ")[1]
+								content := strings.ReplaceAll(command, "msg "+sender+" ", "")
+								common.Log.Info("[%s] %s: %s", command, sender, content)
+								h.clients.Range(func(key, value any) bool {
+									client := value.(*activeClient)
+									if client.UserInfo.UserName == sender {
+										client.MessageOutChan <- Message{Data: []byte(content)}
+									}
+									return true
+								})
 
-							h.clients.Range(func(key, value any) bool {
-								client := value.(*activeClient)
-								if client.UserInfo.UserName != sender {
+								h.clients.Range(func(key, value any) bool {
+									client := value.(*activeClient)
+									if client.UserInfo.UserName != sender {
+										client.MessageOutChan <- Message{Data: []byte(content), Delay: 10 * time.Millisecond}
+									}
+									return true
+								})
+							} else if strings.HasPrefix(command, "all") {
+								// 广播文本：直接广播，所有人按顺序收到消息
+								content := strings.ReplaceAll(command, "all ", "")
+								common.Log.Info("[%S]: %s", command, content)
+								h.clients.Range(func(key, value any) bool {
+									client := value.(*activeClient)
 									client.MessageOutChan <- Message{Data: []byte(content), Delay: 10 * time.Millisecond}
+									return true
+								})
+							} else if strings.HasPrefix(command, "slow") {
+								// 广播文本：慢广播，慢速发送，但所有人都能收到
+								content := strings.ReplaceAll(command, "slow ", "")
+								common.Log.Info("[%s]: %s", command, content)
+								h.clients.Range(func(key, value any) bool {
+									client := value.(*activeClient)
+									client.MessageOutChan <- Message{Data: []byte(content), Delay: 100 * time.Millisecond}
+									return true
+								})
+							} else if command == "online" {
+								onlineUsersSet := make(map[string]*model.UserInfo)
+								h.clients.Range(func(key, value any) bool {
+									client := value.(*activeClient)
+									onlineUsersSet[client.UserInfo.OId] = client.UserInfo
+									return true
+								})
+								onlineUsers := make([]*model.UserInfo, 0)
+								for _, userInfo := range onlineUsersSet {
+									onlineUsers = append(onlineUsers, userInfo)
 								}
-								return true
-							})
-						} else if strings.HasPrefix(command, "all") {
-							// 广播文本：直接广播，所有人按顺序收到消息
-							content := strings.ReplaceAll(command, "all ", "")
-							common.Log.Info("[%S]: %s", command, content)
-							h.clients.Range(func(key, value any) bool {
-								client := value.(*activeClient)
-								client.MessageOutChan <- Message{Data: []byte(content), Delay: 10 * time.Millisecond}
-								return true
-							})
-						} else if strings.HasPrefix(command, "slow") {
-							// 广播文本：慢广播，慢速发送，但所有人都能收到
-							content := strings.ReplaceAll(command, "slow ", "")
-							common.Log.Info("[%s]: %s", command, content)
-							h.clients.Range(func(key, value any) bool {
-								client := value.(*activeClient)
-								client.MessageOutChan <- Message{Data: []byte(content), Delay: 100 * time.Millisecond}
-								return true
-							})
-						} else if command == "online" {
-							onlineUsersSet := make(map[string]*model.UserInfo)
-							h.clients.Range(func(key, value any) bool {
-								client := value.(*activeClient)
-								onlineUsersSet[client.UserInfo.OId] = client.UserInfo
-								return true
-							})
-							onlineUsers := make([]*model.UserInfo, 0)
-							for _, userInfo := range onlineUsersSet {
-								onlineUsers = append(onlineUsers, userInfo)
-							}
 
-							result, err := json.Marshal(onlineUsers)
-							if err != nil {
-								common.Log.Error("marshal online users failed: %s", err)
-							}
-							common.Log.Info("[%s]: number %d list %s", command, len(onlineUsers), string(result))
-							if len(onlineUsers) == 0 {
-								result = []byte("[]")
-							}
-							master.MessageOutChan <- []byte(result)
-						} else if strings.HasPrefix(command, "push") {
-							content := strings.ReplaceAll(command, "push ", "")
-							common.Log.Info("[%s]: %s", command, content)
-							h.AllOnlineUsers = content
-							master.MessageOutChan <- []byte("OK")
-						} else if strings.HasPrefix(command, "kick") {
-							userName := strings.ReplaceAll(command, "kick ", "")
-							common.Log.Info("[%s]: %s", command, userName)
-							h.clients.Range(func(key, value any) bool {
-								conn := key.(*websocket.Conn)
-								client := value.(*activeClient)
-								if client.UserInfo.UserName == userName {
-									h.Unregister <- conn
+								result, err := json.Marshal(onlineUsers)
+								if err != nil {
+									common.Log.Error("marshal online users failed: %s", err)
 								}
-								return true
-							})
-						} else if command == "clear" {
-							data := make(map[string]int)
-							h.clients.Range(func(key, value any) bool {
-								conn := key.(*websocket.Conn)
-								client := value.(*activeClient)
-								if client.LastActive.Add(time.Hour * 6).Before(time.Now()) {
-									common.Log.Info("clear: %s", client.UserInfo.UserName)
-									data[client.UserInfo.UserName] = time.Now().Second() - client.LastActive.Second()
-									h.Unregister <- conn
+								common.Log.Info("[%s]: number %d list %s", command, len(onlineUsers), string(result))
+								if len(onlineUsers) == 0 {
+									result = []byte("[]")
 								}
-								return true
-							})
+								master.MessageOutChan <- []byte(result)
+							} else if strings.HasPrefix(command, "push") {
+								content := strings.ReplaceAll(command, "push ", "")
+								common.Log.Info("[%s]: %s", command, content)
+								h.AllOnlineUsers = content
+								master.MessageOutChan <- []byte("OK")
+							} else if strings.HasPrefix(command, "kick") {
+								userName := strings.ReplaceAll(command, "kick ", "")
+								common.Log.Info("[%s]: %s", command, userName)
+								h.clients.Range(func(key, value any) bool {
+									conn := key.(*websocket.Conn)
+									client := value.(*activeClient)
+									if client.UserInfo.UserName == userName {
+										h.Unregister <- conn
+									}
+									return true
+								})
+							} else if command == "clear" {
+								data := make(map[string]int)
+								h.clients.Range(func(key, value any) bool {
+									conn := key.(*websocket.Conn)
+									client := value.(*activeClient)
+									if client.LastActive.Add(time.Hour * 6).Before(time.Now()) {
+										common.Log.Info("clear: %s", client.UserInfo.UserName)
+										data[client.UserInfo.UserName] = time.Now().Second() - client.LastActive.Second()
+										h.Unregister <- conn
+									}
+									return true
+								})
 
-							result, err := json.Marshal(data)
-							if err != nil {
-								common.Log.Error("marshal clear result failed: %s", err)
+								result, err := json.Marshal(data)
+								if err != nil {
+									common.Log.Error("marshal clear result failed: %s", err)
+								}
+								common.Log.Info("[%s]: number %d list %s", command, len(data), string(result))
+								master.MessageOutChan <- result
 							}
-							common.Log.Info("[%s]: number %d list %s", command, len(data), string(result))
-							master.MessageOutChan <- result
 						}
 					}
 				}
-			}
+			}()
 		case <-master.Done:
 			return
 		}

@@ -2,3 +2,4 @@
 *.iml
 /log
 conf.json
+/releases/
