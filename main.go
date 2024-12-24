@@ -2,8 +2,6 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	"net/http"
-	"net/http/pprof"
 	"rhyus-golang/api"
 	"rhyus-golang/common"
 	"rhyus-golang/conf"
@@ -12,18 +10,6 @@ import (
 )
 
 func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/debug/pprof/", pprof.Index)
-	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-	go func() {
-		err := http.ListenAndServe(":"+strconv.Itoa(conf.Conf.PprofPort), mux)
-		if err != nil {
-			common.Log.Fatal(common.ExitCodeUnavailablePort, "serve start failed: %s", err)
-		}
-	}()
 
 	gin.SetMode(gin.ReleaseMode)
 	ginServer := gin.New()

@@ -6,14 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"rhyus-golang/common"
-	"strconv"
 	"sync"
 )
 
 type AppConf struct {
 	Host                   string `json:"host,omitempty"`
 	Port                   int    `json:"port,omitempty"`
-	PprofPort              int    `json:"pprofPort,omitempty"`
+	Pprof                  *Pprof `json:"pprof,omitempty"`
 	Ssl                    *Ssl   `json:"ssl,omitempty"`
 	MasterUrl              string `json:"masterUrl,omitempty"`
 	AdminKey               string `json:"adminKey,omitempty"`
@@ -32,6 +31,13 @@ type Ssl struct {
 	KeyPath  string `json:"key_path,omitempty"`
 }
 
+type Pprof struct {
+	Enable     bool `json:"enable,omitempty"`
+	PporfPort  int  `json:"pporfPort,omitempty"`
+	MaxFile    int  `json:"maxFile,omitempty"`
+	SampleTime int  `json:"sampleTime,omitempty"`
+}
+
 var Conf *AppConf
 var ConfigPath string
 
@@ -41,7 +47,11 @@ func init() {
 		common.Log.Fatal(common.ExitCodeFileSysErr, "get current directory failed: %s", err)
 	}
 	host := flag.String("host", "0.0.0.0", "host of the HTTP server")
-	portStr := flag.String("port", "10831", "port of the HTTP server")
+	port := flag.Int("port", 10831, "port of the HTTP server")
+	pprof := flag.Bool("pprof", false, "enable pprof")
+	pprofPort := flag.Int("pprof-port", 10832, "port of the pprof server")
+	maxFile := flag.Int("max-file", 6, "max file number of pprof")
+	sampleTime := flag.Int("sample-time", 10, "sample time of pprof")
 	ssl := flag.Bool("ssl", false, "enable SSL")
 	certPath := flag.String("cert-path", "", "path of SSL certificate")
 	keyPath := flag.String("key-path", "", "path of SSL key")
@@ -54,14 +64,16 @@ func init() {
 	logLevel := flag.String("log-level", "info", "log level")
 	flag.Parse()
 
-	port, err := strconv.Atoi(*portStr)
-	if err != nil {
-		common.Log.Fatal(common.ExitCodeFileSysErr, "invalid port: %s", *portStr)
-	}
 	Conf = &AppConf{
 		LogLevel: *logLevel,
 		Host:     *host,
-		Port:     port,
+		Port:     *port,
+		Pprof: &Pprof{
+			Enable:     *pprof,
+			PporfPort:  *pprofPort,
+			MaxFile:    *maxFile,
+			SampleTime: *sampleTime,
+		},
 		Ssl: &Ssl{
 			Enabled:  *ssl,
 			CertPath: *certPath,
