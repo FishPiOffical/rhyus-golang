@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func init() {
+func StartPProfServe() {
 	if conf.Conf.Pprof.Enable {
 		// 启动 HTTP 服务，暴露 pprof 信息
 		mux := http.NewServeMux()
@@ -26,6 +26,7 @@ func init() {
 		mux.HandleFunc("/debug/pprof/trace", netpporf.Trace)
 		go func() {
 			err := http.ListenAndServe(":"+strconv.Itoa(conf.Conf.Pprof.PporfPort), mux)
+			common.Log.Info("pprof server started on :%d", conf.Conf.Pprof.PporfPort)
 			if err != nil {
 				common.Log.Fatal(common.ExitCodeUnavailablePort, "serve start failed: %s", err)
 			}

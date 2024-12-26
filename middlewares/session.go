@@ -1,13 +1,13 @@
 package middlewares
 
 import (
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"rhyus-golang/common"
 	"rhyus-golang/conf"
 	"rhyus-golang/model"
 	"rhyus-golang/util"
+	"runtime/debug"
 	"time"
 )
 
@@ -30,14 +30,9 @@ func Logging(c *gin.Context) {
 }
 
 // Recover 异常处理、日志记录
-func Recover(c *gin.Context) {
-	defer func() {
-		if e := recover(); nil != e {
-			common.Log.RecoverError(e)
-			model.Fail(c, fmt.Sprintf("%v", e))
-		}
-	}()
-	c.Next()
+func Recover(c *gin.Context, err any) {
+	common.Log.Error("%s", debug.Stack())
+	c.Abort()
 }
 
 // CorsMiddleware 配置跨域请求

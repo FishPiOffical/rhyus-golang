@@ -6,10 +6,12 @@ import (
 	"rhyus-golang/common"
 	"rhyus-golang/conf"
 	"rhyus-golang/middlewares"
+	"rhyus-golang/service"
 	"strconv"
 )
 
 func main() {
+	service.StartPProfServe()
 
 	gin.SetMode(gin.ReleaseMode)
 	ginServer := gin.New()
@@ -17,7 +19,7 @@ func main() {
 	ginServer.MaxMultipartMemory = 1024 * 1024 * 32 // 表示处理上传的文件时，最多将32MB的数据保存在内存中，超出部分会保存到临时文件中。这样可以避免大文件上传时占用过多内存。
 	ginServer.Use(
 		middlewares.Logging,
-		middlewares.Recover,
+		gin.CustomRecovery(middlewares.Recover),
 		middlewares.CorsMiddleware,
 		middlewares.Authorize,
 	)
