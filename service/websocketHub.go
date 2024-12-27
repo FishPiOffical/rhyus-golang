@@ -16,16 +16,18 @@ var Hub *webSocketHub
 
 // webSocketHub WebSocket 连接池
 type webSocketHub struct {
-	masterPool       *common.WorkerPool   // 主节点协程池
-	masters          sync.Map             // 存储所有连接的服务端
-	MasterNode       chan *websocket.Conn // 主节点连接的通道
-	MasterUnregister chan *websocket.Conn // 断开连接的通道
+	masterPool               *common.WorkerPool   // 主节点协程池
+	ClientMessageHandlerPool *common.WorkerPool   // 主节点消息处理协程池
+	masters                  sync.Map             // 存储所有连接的服务端
+	MasterNode               chan *websocket.Conn // 主节点连接的通道
+	MasterUnregister         chan *websocket.Conn // 断开连接的通道
 
-	clientPool       *common.WorkerPool   // 客户端协程池
-	clients          sync.Map             // 存储所有连接的客户端
-	ClientNode       chan *websocket.Conn // 新客户端连接的通道
-	ClientUnregister chan *websocket.Conn // 断开连接的通道
-	AllOnlineUsers   string               // 所有在线用户
+	clientConnPool    *common.WorkerPool   // 客户端协程池
+	clients           sync.Map             // 存储所有连接的客户端
+	ClientMessageChan chan *Message        // 客户端消息通道
+	ClientNode        chan *websocket.Conn // 新客户端连接的通道
+	ClientUnregister  chan *websocket.Conn // 断开连接的通道
+	AllOnlineUsers    string               // 所有在线用户
 
 	localOnlineUsernames map[string]int // 本地在线用户名
 	mu                   sync.Mutex     // 保护 localOnlineUsernames 的并发安全
@@ -37,28 +39,34 @@ type activeMaster struct {
 }
 
 type activeClient struct {
-	UserInfo       *model.UserInfo
-	MessageOutChan chan Message
-	LastActive     time.Time
+	Conn       *websocket.Conn
+	UserInfo   *model.UserInfo
+	LastActive time.Time
 }
 
 func init() {
 	Hub = &webSocketHub{
-		masterPool:           common.Pool.NewWorkerPool(32),                             // 主节点协程池
-		masters:              sync.Map{},                                                // key:*websocket.Conn value:*activeMaster
-		MasterNode:           make(chan *websocket.Conn, conf.Conf.MasterNodeCacheSize), // key:*websocket.Conn value:chan []byte
-		MasterUnregister:     make(chan *websocket.Conn, conf.Conf.MasterNodeCacheSize), // 断开连接
-		clientPool:           common.Pool.NewWorkerPool(conf.Conf.ClientPoolSize),       // 客户端协程池
-		clients:              sync.Map{},                                                // key:*websocket.Conn value:*activeClient
-		ClientNode:           make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 新连接
-		ClientUnregister:     make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 断开连接
-		AllOnlineUsers:       "{}",                                                      // 所有在线用户
-		localOnlineUsernames: make(map[string]int, conf.Conf.ClientNodeCacheSize),       // key:username value:true
+		masterPool:       common.Pool.NewWorkerPool(32),                             // 主节点协程池
+		masters:          sync.Map{},                                                // key:*websocket.Conn value:*activeMaster
+		MasterNode:       make(chan *websocket.Conn, conf.Conf.MasterNodeCacheSize), // key:*websocket.Conn value:chan []byte
+		MasterUnregister: make(chan *websocket.Conn, conf.Conf.MasterNodeCacheSize), // 断开连接
+
+		clientConnPool:           common.Pool.NewWorkerPool(conf.Conf.ClientPoolSize),               // 客户端协程池
+		ClientMessageHandlerPool: common.Pool.NewWorkerPool(conf.Conf.ClientMessageHandlerPoolSize), // 客户端消息处理协程池
+		clients:                  sync.Map{},                                                        // key:*websocket.Conn value:*activeClient
+		ClientMessageChan:        make(chan *Message, conf.Conf.ClientMessageCacheSize),
+		ClientNode:               make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 新连接
+		ClientUnregister:         make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 断开连接
+
+		AllOnlineUsers:       "{}",                                                // 所有在线用户
+		localOnlineUsernames: make(map[string]int, conf.Conf.ClientNodeCacheSize), // key:username value:true
 	}
 
 	Hub.masterPool.Start()
-	Hub.clientPool.Start()
+	Hub.ClientMessageHandlerPool.Start()
+	Hub.clientConnPool.Start()
 
+	Hub.masterPool.AddTask(Hub.sendMessageToClient)
 	Hub.masterPool.AddTask(Hub.MasterUnregisterHandler)
 	Hub.masterPool.AddTask(Hub.masterHandler)
 	Hub.masterPool.AddTask(Hub.ClientUnregisterHandler)
@@ -99,7 +107,6 @@ func (h *webSocketHub) ClientUnregisterHandler() {
 		} else {
 			common.Log.Info("client %s leave failed: %s", userInfo.UserName, conn.RemoteAddr().String())
 		}
-		close(client.(*activeClient).MessageOutChan)
 		err := conn.Close()
 		if err != nil {
 			common.Log.Error("close conn failed: %s", err)
@@ -134,7 +141,7 @@ func (h *webSocketHub) clientHandler() {
 		userInfo := client.(*activeClient).UserInfo
 		if ok {
 			common.Log.Info("client %s has joined: %s", userInfo.UserName, conn.RemoteAddr().String())
-			h.clientPool.AddTask(func() {
+			h.clientConnPool.AddTask(func() {
 				h.mu.Lock()
 				count := h.localOnlineUsernames[userInfo.UserName]
 				if count < 1 {
@@ -143,22 +150,26 @@ func (h *webSocketHub) clientHandler() {
 				h.localOnlineUsernames[userInfo.UserName] = count + 1
 				h.mu.Unlock()
 			})
-			h.clientPool.AddTask(func() {
-				for message := range client.(*activeClient).MessageOutChan {
-					if message.Delay > 0 {
-						time.Sleep(message.Delay)
-					}
-					err := conn.WriteMessage(websocket.TextMessage, message.Data)
-					if err != nil {
-						h.ClientUnregister <- conn
-						return
-					}
-				}
-			})
 		} else {
 			common.Log.Error("client %s join failed: %s", userInfo.UserName, conn.RemoteAddr().String())
 			h.ClientUnregister <- conn
 		}
+	}
+}
+
+func (h *webSocketHub) sendMessageToClient() {
+	for message := range h.ClientMessageChan {
+		h.ClientMessageHandlerPool.AddTask(func() {
+			if message.Delay > 0 {
+				time.Sleep(message.Delay)
+			}
+			//common.Log.Info(" ---> client %s: %s", message.ToConn.RemoteAddr().String(), string(message.Data))
+			err := message.ToConn.WriteMessage(websocket.TextMessage, message.Data)
+			if err != nil {
+				h.ClientUnregister <- message.ToConn
+				return
+			}
+		})
 	}
 }
 
@@ -200,7 +211,7 @@ func (h *webSocketHub) handleMasterMessage(connMaster *websocket.Conn, master *a
 							h.clients.Range(func(key, value any) bool {
 								client := value.(*activeClient)
 								if client.UserInfo.UserName == to {
-									client.MessageOutChan <- Message{Data: []byte(content)}
+									h.ClientMessageChan <- &Message{ToConn: client.Conn, Data: []byte(content)}
 								}
 								return true
 							})
@@ -212,7 +223,7 @@ func (h *webSocketHub) handleMasterMessage(connMaster *websocket.Conn, master *a
 							h.clients.Range(func(key, value any) bool {
 								client := value.(*activeClient)
 								if client.UserInfo.UserName == sender {
-									client.MessageOutChan <- Message{Data: []byte(content)}
+									h.ClientMessageChan <- &Message{ToConn: client.Conn, Data: []byte(content)}
 								}
 								return true
 							})
@@ -220,7 +231,7 @@ func (h *webSocketHub) handleMasterMessage(connMaster *websocket.Conn, master *a
 							h.clients.Range(func(key, value any) bool {
 								client := value.(*activeClient)
 								if client.UserInfo.UserName != sender {
-									client.MessageOutChan <- Message{Data: []byte(content), Delay: 10 * time.Millisecond}
+									h.ClientMessageChan <- &Message{ToConn: client.Conn, Data: []byte(content), Delay: 10 * time.Millisecond}
 								}
 								return true
 							})
@@ -230,7 +241,7 @@ func (h *webSocketHub) handleMasterMessage(connMaster *websocket.Conn, master *a
 							common.Log.Info("[%S]: %s", command, content)
 							h.clients.Range(func(key, value any) bool {
 								client := value.(*activeClient)
-								client.MessageOutChan <- Message{Data: []byte(content), Delay: 10 * time.Millisecond}
+								h.ClientMessageChan <- &Message{ToConn: client.Conn, Data: []byte(content), Delay: 10 * time.Millisecond}
 								return true
 							})
 						} else if strings.HasPrefix(command, "slow") {
@@ -239,7 +250,7 @@ func (h *webSocketHub) handleMasterMessage(connMaster *websocket.Conn, master *a
 							common.Log.Info("[%s]: %s", command, content)
 							h.clients.Range(func(key, value any) bool {
 								client := value.(*activeClient)
-								client.MessageOutChan <- Message{Data: []byte(content), Delay: 100 * time.Millisecond}
+								h.ClientMessageChan <- &Message{ToConn: client.Conn, Data: []byte(content), Delay: 100 * time.Millisecond}
 								return true
 							})
 						} else if command == "online" {
@@ -339,15 +350,16 @@ func (h *webSocketHub) AddMaster(conn *websocket.Conn) {
 
 func (h *webSocketHub) AddClient(conn *websocket.Conn, userInfo *model.UserInfo) *activeClient {
 	client := &activeClient{
-		UserInfo:       userInfo,
-		MessageOutChan: make(chan Message, conf.Conf.ClientMessageCacheSize),
-		LastActive:     time.Now(),
+		Conn:       conn,
+		UserInfo:   userInfo,
+		LastActive: time.Now(),
 	}
 	h.clients.LoadOrStore(conn, client)
 	return client
 }
 
 type Message struct {
-	Data  []byte
-	Delay time.Duration
+	ToConn *websocket.Conn
+	Data   []byte
+	Delay  time.Duration
 }

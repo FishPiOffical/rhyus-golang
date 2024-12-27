@@ -28,7 +28,7 @@ func GetUserInfo(apiKey string) *model.UserInfo {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		common.Log.Error("Request failed with status: %s", resp.Status)
+		common.Log.Info("Request failed with status: %s", resp.Status)
 		return nil
 	}
 
@@ -74,7 +74,7 @@ func PostMessageToMaster(adminKey string, msg string, data string) {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		common.Log.Error("Request failed with status: %s", resp.Status)
+		common.Log.Info("Request failed with status: %s", resp.Status)
 		return
 	}
 }

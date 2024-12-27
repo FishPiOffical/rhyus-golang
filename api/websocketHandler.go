@@ -45,6 +45,6 @@ func ChatroomWebSocket(c *gin.Context) {
 		client := service.Hub.AddClient(conn, userInfo.(*model.UserInfo))
 		service.Hub.ClientNode <- conn
 
-		client.MessageOutChan <- service.Message{Data: []byte(service.Hub.AllOnlineUsers), Delay: 2 * time.Second}
+		service.Hub.ClientMessageChan <- &service.Message{ToConn: client.Conn, Data: []byte(service.Hub.AllOnlineUsers), Delay: 2 * time.Second}
 	}
 }
