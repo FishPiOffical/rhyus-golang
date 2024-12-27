@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"rhyus-golang/common"
+	"runtime"
 	"sync"
 )
 
@@ -23,15 +24,16 @@ type AppConf struct {
 	ClientMessageCacheSize int `json:"clientMessageCacheSize,omitempty"`
 	ClientPoolSize         int `json:"clientPoolSize,omitempty"`
 
-	LogLevel string `json:"logLevel,omitempty"`
+	GoMaxProcs int    `json:"goMaxProcs,omitempty"`
+	LogLevel   string `json:"logLevel,omitempty"`
 
 	m *sync.Mutex
 }
 
 type Ssl struct {
 	Enabled  bool   `json:"enabled,omitempty"`
-	CertPath string `json:"cert_path,omitempty"`
-	KeyPath  string `json:"key_path,omitempty"`
+	CertPath string `json:"certPath,omitempty"`
+	KeyPath  string `json:"keyPath,omitempty"`
 }
 
 type Pprof struct {
@@ -52,20 +54,21 @@ func init() {
 	host := flag.String("host", "0.0.0.0", "host of the HTTP server")
 	port := flag.Int("port", 10831, "port of the HTTP server")
 	pprof := flag.Bool("pprof", false, "enable pprof")
-	pprofPort := flag.Int("pprof-port", 10832, "port of the pprof server")
-	maxFile := flag.Int("max-file", 6, "max file number of pprof")
-	sampleTime := flag.Int("sample-time", 10, "sample time of pprof")
+	pprofPort := flag.Int("pprofPort", 10832, "port of the pprof server")
+	maxFile := flag.Int("maxFile", 6, "max file number of pprof")
+	sampleTime := flag.Int("sampleTime", 10, "sample time of pprof")
 	ssl := flag.Bool("ssl", false, "enable SSL")
-	certPath := flag.String("cert-path", "", "path of SSL certificate")
-	keyPath := flag.String("key-path", "", "path of SSL key")
-	masterUrl := flag.String("master-url", "https://fishpi.cn", "master server URL")
-	adminKey := flag.String("admin-key", "", "admin key")
-	masterNodeCacheSize := flag.Int("master-node-cache-size", 8, "master node cache size")
-	masterMessageCacheSize := flag.Int("master-message-cache-size", 64, "master message cache size")
-	clientNodeCacheSize := flag.Int("client-node-cache-size", 64, "client node cache size")
-	clientMessageCacheSize := flag.Int("client-message-cache-size", 1024, "client message cache size")
-	clientPoolSize := flag.Int("client-pool-size", 128, "client pool size")
-	logLevel := flag.String("log-level", "info", "log level")
+	certPath := flag.String("certPath", "", "path of SSL certificate")
+	keyPath := flag.String("keyPath", "", "path of SSL key")
+	masterUrl := flag.String("masterUrl", "https://fishpi.cn", "master server URL")
+	adminKey := flag.String("adminKey", "", "admin key")
+	masterNodeCacheSize := flag.Int("masterNodeCacheSize", 8, "master node cache size")
+	masterMessageCacheSize := flag.Int("masterMessageCacheSize", 64, "master message cache size")
+	clientNodeCacheSize := flag.Int("clientNodeCacheSize", 64, "client node cache size")
+	clientMessageCacheSize := flag.Int("clientMessageCacheSize", 1024, "client message cache size")
+	clientPoolSize := flag.Int("clientPoolSize", 128, "client pool size")
+	goMaxProcs := flag.Int("goMaxProcs", runtime.NumCPU(), "go max procs")
+	logLevel := flag.String("logLevel", "info", "log level")
 	flag.Parse()
 
 	Conf = &AppConf{
@@ -90,7 +93,9 @@ func init() {
 		ClientNodeCacheSize:    *clientNodeCacheSize,
 		ClientMessageCacheSize: *clientMessageCacheSize,
 		ClientPoolSize:         *clientPoolSize,
-		m:                      &sync.Mutex{},
+
+		GoMaxProcs: *goMaxProcs,
+		m:          &sync.Mutex{},
 	}
 	ConfigPath = filepath.Join(workSpace, "conf.json")
 	if common.File.IsExist(ConfigPath) {
@@ -104,7 +109,7 @@ func init() {
 			}
 		}
 	}
-
+	runtime.GOMAXPROCS(Conf.GoMaxProcs)
 	common.Log.SetLogLevel(Conf.LogLevel)
 	common.Log.Info("log level: [%s] save path: [%s]", Conf.LogLevel, common.LogPath)
 	Conf.Save()
