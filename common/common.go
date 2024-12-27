@@ -8,6 +8,7 @@ type (
 	GuOs        byte
 	GuRand      byte
 	GuRuntime   byte
+	GuPool      byte
 )
 
 var (
@@ -18,4 +19,5 @@ var (
 	OS       GuOs
 	Rand     GuRand
 	Runtime  GuRuntime
+	Pool     GuPool
 )

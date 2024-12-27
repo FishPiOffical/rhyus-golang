@@ -10,17 +10,20 @@ import (
 )
 
 type AppConf struct {
-	Host                   string `json:"host,omitempty"`
-	Port                   int    `json:"port,omitempty"`
-	Pprof                  *Pprof `json:"pprof,omitempty"`
-	Ssl                    *Ssl   `json:"ssl,omitempty"`
-	MasterUrl              string `json:"masterUrl,omitempty"`
-	AdminKey               string `json:"adminKey,omitempty"`
-	MasterNodeCacheSize    int    `json:"masterNodeCacheSize,omitempty"`
-	ClientNodeCacheSize    int    `json:"clientNodeCacheSize,omitempty"`
-	MasterMessageCacheSize int    `json:"masterMessageCacheSize,omitempty"`
-	ClientMessageCacheSize int    `json:"clientMessageCacheSize,omitempty"`
-	LogLevel               string `json:"logLevel,omitempty"`
+	Host      string `json:"host,omitempty"`
+	Port      int    `json:"port,omitempty"`
+	Pprof     *Pprof `json:"pprof,omitempty"`
+	Ssl       *Ssl   `json:"ssl,omitempty"`
+	MasterUrl string `json:"masterUrl,omitempty"`
+	AdminKey  string `json:"adminKey,omitempty"`
+
+	MasterNodeCacheSize    int `json:"masterNodeCacheSize,omitempty"`
+	MasterMessageCacheSize int `json:"masterMessageCacheSize,omitempty"`
+	ClientNodeCacheSize    int `json:"clientNodeCacheSize,omitempty"`
+	ClientMessageCacheSize int `json:"clientMessageCacheSize,omitempty"`
+	ClientPoolSize         int `json:"clientPoolSize,omitempty"`
+
+	LogLevel string `json:"logLevel,omitempty"`
 
 	m *sync.Mutex
 }
@@ -58,9 +61,10 @@ func init() {
 	masterUrl := flag.String("master-url", "https://fishpi.cn", "master server URL")
 	adminKey := flag.String("admin-key", "", "admin key")
 	masterNodeCacheSize := flag.Int("master-node-cache-size", 8, "master node cache size")
-	clientNodeCacheSize := flag.Int("client-node-cache-size", 64, "client node cache size")
 	masterMessageCacheSize := flag.Int("master-message-cache-size", 64, "master message cache size")
+	clientNodeCacheSize := flag.Int("client-node-cache-size", 64, "client node cache size")
 	clientMessageCacheSize := flag.Int("client-message-cache-size", 1024, "client message cache size")
+	clientPoolSize := flag.Int("client-pool-size", 128, "client pool size")
 	logLevel := flag.String("log-level", "info", "log level")
 	flag.Parse()
 
@@ -82,9 +86,10 @@ func init() {
 		MasterUrl:              *masterUrl,
 		AdminKey:               *adminKey,
 		MasterNodeCacheSize:    *masterNodeCacheSize,
-		ClientNodeCacheSize:    *clientNodeCacheSize,
 		MasterMessageCacheSize: *masterMessageCacheSize,
+		ClientNodeCacheSize:    *clientNodeCacheSize,
 		ClientMessageCacheSize: *clientMessageCacheSize,
+		ClientPoolSize:         *clientPoolSize,
 		m:                      &sync.Mutex{},
 	}
 	ConfigPath = filepath.Join(workSpace, "conf.json")

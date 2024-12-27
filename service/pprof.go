@@ -125,7 +125,7 @@ func savePProf(profileType string) {
 		return
 	}
 
-	common.Log.Info("%s profile saved to %s", profileType, fileName)
+	common.Log.Debug("%s profile saved to %s", profileType, fileName)
 }
 
 func keepRecentFiles(maxFiles int) {
@@ -157,7 +157,7 @@ func keepRecentFiles(maxFiles int) {
 		if err := os.Remove(name); err != nil {
 			common.Log.Error("Error removing old file:", err)
 		} else {
-			common.Log.Info("Removed old profile file: %s", name)
+			common.Log.Debug("Removed old profile file: %s", name)
 		}
 	}
 }

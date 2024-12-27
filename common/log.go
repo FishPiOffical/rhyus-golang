@@ -325,9 +325,10 @@ func (g *GuLog) logError(format string, v ...any) {
 	}
 
 	logger.SetPrefix("ERROR ")
+	format += "\n%s"
+	v = append(v, g.ShortStack())
 	msg := fmt.Sprintf(format, v...)
 	_ = logger.Output(3, msg)
-	//sentry.CaptureMessage(msg)
 }
 
 // logFatal prints fatal level message with format and exit process with code 1.
@@ -341,7 +342,6 @@ func (g *GuLog) logFatal(exitCode int, format string, v ...any) {
 	v = append(v, g.ShortStack())
 	msg := fmt.Sprintf(format, v...)
 	_ = logger.Output(3, msg)
-	//sentry.CaptureMessage(msg)
 	g.closeLogger()
 	os.Exit(exitCode)
 }
@@ -349,8 +349,8 @@ func (g *GuLog) logFatal(exitCode int, format string, v ...any) {
 func (g *GuLog) ShortStack() string {
 	output := string(debug.Stack())
 	lines := strings.Split(output, "\n")
-	if 11 < len(lines) {
-		lines = lines[11:]
+	if 32 < len(lines) {
+		lines = lines[32:]
 	}
 	buf := bytes.Buffer{}
 	for _, l := range lines {
