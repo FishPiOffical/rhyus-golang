@@ -9,7 +9,6 @@ import (
 	"rhyus-golang/model"
 	"rhyus-golang/service"
 	"rhyus-golang/util"
-	"time"
 )
 
 // websocket 升级并跨域
@@ -42,9 +41,7 @@ func ChatroomWebSocket(c *gin.Context) {
 	} else {
 		// 客户端连接
 		userInfo, _ := c.Get("userInfo")
-		client := service.Hub.AddClient(conn, userInfo.(*model.UserInfo))
+		service.Hub.AddClient(conn, userInfo.(*model.UserInfo))
 		service.Hub.ClientNode <- conn
-
-		service.Hub.ClientMessageChan <- &service.Message{ToConn: client.Conn, Data: []byte(service.Hub.AllOnlineUsers), Delay: 2 * time.Second}
 	}
 }

@@ -18,13 +18,14 @@ type AppConf struct {
 	MasterUrl string `json:"masterUrl,omitempty"`
 	AdminKey  string `json:"adminKey,omitempty"`
 
+	MasterPoolSize         int `json:"masterPoolSize,omitempty"`
 	MasterNodeCacheSize    int `json:"masterNodeCacheSize,omitempty"`
 	MasterMessageCacheSize int `json:"masterMessageCacheSize,omitempty"`
 
+	ClientPoolSize               int `json:"clientPoolSize,omitempty"`
 	ClientMessageHandlerPoolSize int `json:"clientMessageHandlerPoolSize,omitempty"`
 	ClientNodeCacheSize          int `json:"clientNodeCacheSize,omitempty"`
 	ClientMessageCacheSize       int `json:"clientMessageCacheSize,omitempty"`
-	ClientPoolSize               int `json:"clientPoolSize,omitempty"`
 
 	GoMaxProcs int    `json:"goMaxProcs,omitempty"`
 	LogLevel   string `json:"logLevel,omitempty"`
@@ -65,13 +66,14 @@ func init() {
 	masterUrl := flag.String("masterUrl", "https://fishpi.cn", "master server URL")
 	adminKey := flag.String("adminKey", "", "admin key")
 
+	masterPoolSize := flag.Int("masterPoolSize", 8, "master pool size")
 	masterNodeCacheSize := flag.Int("masterNodeCacheSize", 8, "master node cache size")
 	masterMessageCacheSize := flag.Int("masterMessageCacheSize", 64, "master message cache size")
 
+	clientPoolSize := flag.Int("clientPoolSize", 256, "client pool size")
 	clientMessageHandlerPoolSize := flag.Int("clientMessageHandlerPoolSize", 32, "client message handler pool size")
 	clientNodeCacheSize := flag.Int("clientNodeCacheSize", 64, "client node cache size")
 	clientMessageCacheSize := flag.Int("clientMessageCacheSize", 1024, "client message cache size")
-	clientPoolSize := flag.Int("clientPoolSize", 128, "client pool size")
 
 	goMaxProcs := flag.Int("goMaxProcs", runtime.NumCPU(), "go max procs")
 	logLevel := flag.String("logLevel", "info", "log level")
@@ -95,13 +97,14 @@ func init() {
 		MasterUrl: *masterUrl,
 		AdminKey:  *adminKey,
 
+		MasterPoolSize:         *masterPoolSize,
 		MasterNodeCacheSize:    *masterNodeCacheSize,
 		MasterMessageCacheSize: *masterMessageCacheSize,
 
+		ClientPoolSize:               *clientPoolSize,
 		ClientMessageHandlerPoolSize: *clientMessageHandlerPoolSize,
 		ClientNodeCacheSize:          *clientNodeCacheSize,
 		ClientMessageCacheSize:       *clientMessageCacheSize,
-		ClientPoolSize:               *clientPoolSize,
 
 		GoMaxProcs: *goMaxProcs,
 		m:          &sync.Mutex{},
