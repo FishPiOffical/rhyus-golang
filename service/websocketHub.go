@@ -62,9 +62,9 @@ func init() {
 		clientConnPool:              common.Pool.NewWorkerPool(conf.Conf.ClientPoolSize),               // 客户端协程池
 		clientOutMessageHandlerPool: common.Pool.NewWorkerPool(conf.Conf.ClientMessageHandlerPoolSize), // 客户端消息处理协程池
 		clients:                     sync.Map{},                                                        // key:*websocket.Conn value:*activeClient
-		ClientMessageChan:           make(chan *Message, conf.Conf.ClientMessageCacheSize),
-		ClientNode:                  make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 新连接
-		ClientUnregister:            make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize), // 断开连接
+		ClientMessageChan:           make(chan *Message, conf.Conf.ClientMessageCacheSize),             // 客户端消息通道
+		ClientNode:                  make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize),         // 新连接
+		ClientUnregister:            make(chan *websocket.Conn, conf.Conf.ClientNodeCacheSize),         // 断开连接
 
 		AllOnlineUsers:       "{}",                                                // 所有在线用户
 		localOnlineUsernames: make(map[string]int, conf.Conf.ClientNodeCacheSize), // key:username value:true
@@ -77,11 +77,44 @@ func init() {
 	Hub.clientConnPool.Start()
 	Hub.clientOutMessageHandlerPool.Start()
 
+	Hub.basePool.AddTask(Hub.heartbeat)
 	Hub.basePool.AddTask(Hub.sendMessageToClient)
 	Hub.basePool.AddTask(Hub.MasterUnregisterHandler)
 	Hub.basePool.AddTask(Hub.masterHandler)
 	Hub.basePool.AddTask(Hub.ClientUnregisterHandler)
 	Hub.basePool.AddTask(Hub.clientHandler)
+}
+
+func (h *webSocketHub) heartbeat() {
+	ticker := time.NewTicker(time.Duration(conf.Conf.Heartbeat) * time.Second)
+	defer ticker.Stop()
+	masterNum := 0
+	clientNum := 0
+	for _ = range ticker.C {
+		masterNum = 0
+		h.masters.Range(func(key, value any) bool {
+			conn := key.(*websocket.Conn)
+			err := conn.WriteMessage(websocket.PingMessage, []byte("ping"))
+			if err != nil {
+				h.MasterUnregister <- conn
+				return true
+			}
+			masterNum++
+			return true
+		})
+		clientNum = 0
+		h.clients.Range(func(key, value any) bool {
+			conn := key.(*websocket.Conn)
+			err := conn.WriteMessage(websocket.PingMessage, []byte("ping"))
+			if err != nil {
+				h.ClientUnregister <- conn
+				return true
+			}
+			clientNum++
+			return true
+		})
+		common.Log.Info("active master: %d active client: %d", masterNum, clientNum)
+	}
 }
 
 func (h *webSocketHub) MasterUnregisterHandler() {
@@ -293,7 +326,7 @@ func (h *webSocketHub) handleMasterMessage(connMaster *websocket.Conn, master *a
 							if len(onlineUsers) == 0 {
 								result = []byte("[]")
 							}
-							master.MessageOutChan <- []byte(result)
+							master.MessageOutChan <- result
 						} else if strings.HasPrefix(command, "push") {
 							content := strings.ReplaceAll(command, "push ", "")
 							common.Log.Info("[push]: %s", content)

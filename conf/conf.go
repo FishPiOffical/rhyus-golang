@@ -17,6 +17,7 @@ type AppConf struct {
 	Ssl       *Ssl   `json:"ssl,omitempty"`
 	MasterUrl string `json:"masterUrl,omitempty"`
 	AdminKey  string `json:"adminKey,omitempty"`
+	Heartbeat int    `json:"heartbeat,omitempty"`
 
 	MasterPoolSize         int `json:"masterPoolSize,omitempty"`
 	MasterNodeCacheSize    int `json:"masterNodeCacheSize,omitempty"`
@@ -65,6 +66,7 @@ func init() {
 	keyPath := flag.String("keyPath", "", "path of SSL key")
 	masterUrl := flag.String("masterUrl", "https://fishpi.cn", "master server URL")
 	adminKey := flag.String("adminKey", "", "admin key")
+	heartbeat := flag.Int("heartbeat", 10, "heartbeat interval")
 
 	masterPoolSize := flag.Int("masterPoolSize", 8, "master pool size")
 	masterNodeCacheSize := flag.Int("masterNodeCacheSize", 8, "master node cache size")
@@ -96,6 +98,7 @@ func init() {
 		},
 		MasterUrl: *masterUrl,
 		AdminKey:  *adminKey,
+		Heartbeat: *heartbeat,
 
 		MasterPoolSize:         *masterPoolSize,
 		MasterNodeCacheSize:    *masterNodeCacheSize,
