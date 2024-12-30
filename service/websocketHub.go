@@ -94,22 +94,14 @@ func (h *webSocketHub) heartbeat() {
 		masterNum = 0
 		h.masters.Range(func(key, value any) bool {
 			conn := key.(*websocket.Conn)
-			err := conn.WriteMessage(websocket.PingMessage, []byte("ping"))
-			if err != nil {
-				h.MasterUnregister <- conn
-				return true
-			}
+			h.ClientMessageChan <- &Message{ToConn: conn, Data: []byte("ping")}
 			masterNum++
 			return true
 		})
 		clientNum = 0
 		h.clients.Range(func(key, value any) bool {
 			conn := key.(*websocket.Conn)
-			err := conn.WriteMessage(websocket.PingMessage, []byte("ping"))
-			if err != nil {
-				h.ClientUnregister <- conn
-				return true
-			}
+			h.ClientMessageChan <- &Message{ToConn: conn, Data: []byte("ping")}
 			clientNum++
 			return true
 		})
