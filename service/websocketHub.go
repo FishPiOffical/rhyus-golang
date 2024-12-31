@@ -16,7 +16,7 @@ var Hub *webSocketHub
 
 // webSocketHub WebSocket 连接池
 type webSocketHub struct {
-	basePool *common.WorkerPool // 基础协程池
+	basePool *common.SteadyWorkerPool // 基础协程池
 
 	masterConnPool              *common.WorkerPool   // 服务端协程池
 	masterInMessageHandlerPool  *common.WorkerPool   // 服务端入站消息处理协程池 <---
@@ -50,7 +50,7 @@ type activeClient struct {
 
 func init() {
 	Hub = &webSocketHub{
-		basePool: common.Pool.NewWorkerPool(16), // 主节点协程池
+		basePool: common.Pool.NewSteadyWorkerPool(16), // 主节点协程池
 
 		masterConnPool:              common.Pool.NewWorkerPool(conf.Conf.MasterPoolSize),       // 客户端协程池
 		masterInMessageHandlerPool:  common.Pool.NewWorkerPool(conf.Conf.MasterPoolSize * 3),   // 客户端消息处理协程池
@@ -70,7 +70,6 @@ func init() {
 		localOnlineUsernames: make(map[string]int, conf.Conf.ClientNodeCacheSize), // key:username value:true
 	}
 
-	Hub.basePool.Start()
 	Hub.masterConnPool.Start()
 	Hub.masterInMessageHandlerPool.Start()
 	Hub.masterOutMessageHandlerPool.Start()
@@ -127,8 +126,8 @@ func (h *webSocketHub) MasterUnregisterHandler() {
 func (h *webSocketHub) ClientUnregisterHandler() {
 	for conn := range h.ClientUnregister {
 		client, ok := h.clients.LoadAndDelete(conn)
-		userInfo := client.(*activeClient).UserInfo
 		if ok {
+			userInfo := client.(*activeClient).UserInfo
 			common.Log.Info("client %s has leaved: %s", userInfo.UserName, conn.RemoteAddr().String())
 			h.mu.Lock()
 			count := h.localOnlineUsernames[userInfo.UserName]
@@ -140,8 +139,6 @@ func (h *webSocketHub) ClientUnregisterHandler() {
 				h.localOnlineUsernames[userInfo.UserName] = count - 1
 			}
 			h.mu.Unlock()
-		} else {
-			common.Log.Info("client %s leave failed: %s", userInfo.UserName, conn.RemoteAddr().String())
 		}
 		err := conn.Close()
 		if err != nil {
@@ -154,8 +151,8 @@ func (h *webSocketHub) masterHandler() {
 	for conn := range h.MasterNode {
 		master, ok := h.masters.Load(conn)
 		if ok {
-			common.Log.Info("master has joined: %s", conn.RemoteAddr().String())
 			master := master.(*activeMaster)
+			common.Log.Info("master has joined: %s", conn.RemoteAddr().String())
 			h.masterConnPool.AddTask(func() {
 				h.listenMaterMessage(conn, master)
 			})
@@ -176,8 +173,8 @@ func (h *webSocketHub) clientHandler() {
 		// 延迟发送 AllOnlineUsers 列表
 		h.ClientMessageChan <- &Message{ToConn: conn, Data: []byte(h.AllOnlineUsers), Delay: 2 * time.Second}
 		client, ok := h.clients.Load(conn)
-		userInfo := client.(*activeClient).UserInfo
 		if ok {
+			userInfo := client.(*activeClient).UserInfo
 			common.Log.Info("client %s has joined: %s", userInfo.UserName, conn.RemoteAddr().String())
 			h.clientConnPool.AddTask(func() {
 				h.mu.Lock()
@@ -188,9 +185,6 @@ func (h *webSocketHub) clientHandler() {
 				h.localOnlineUsernames[userInfo.UserName] = count + 1
 				h.mu.Unlock()
 			})
-		} else {
-			common.Log.Error("client %s join failed: %s", userInfo.UserName, conn.RemoteAddr().String())
-			h.ClientUnregister <- conn
 		}
 	}
 }
