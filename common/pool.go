@@ -58,6 +58,12 @@ func (wp *WorkerPool) AddTask(task func()) {
 	wp.taskQueue <- task
 }
 
+func (wp *WorkerPool) AddTasks(task func(), workCount int) {
+	for i := 0; i < workCount; i++ {
+		wp.AddTask(task)
+	}
+}
+
 func (wp *WorkerPool) Wait() {
 	wp.wg.Wait()
 }
@@ -100,6 +106,12 @@ func (wp *SteadyWorkerPool) AddTask(task func()) {
 	i := len(wp.tasks)
 	wp.tasks = append(wp.tasks, task)
 	go wp.worker(i)
+}
+
+func (wp *SteadyWorkerPool) AddTasks(task func(), workCount int) {
+	for i := 0; i < workCount; i++ {
+		wp.AddTask(task)
+	}
 }
 
 func (wp *SteadyWorkerPool) worker(i int) {

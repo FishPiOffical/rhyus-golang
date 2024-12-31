@@ -70,11 +70,11 @@ func init() {
 
 	masterPoolSize := flag.Int("masterPoolSize", 8, "master pool size")
 	masterNodeCacheSize := flag.Int("masterNodeCacheSize", 8, "master node cache size")
-	masterMessageCacheSize := flag.Int("masterMessageCacheSize", 64, "master message cache size")
+	masterMessageCacheSize := flag.Int("masterMessageCacheSize", 32, "master message cache size")
 
-	clientPoolSize := flag.Int("clientPoolSize", 256, "client pool size")
+	clientPoolSize := flag.Int("clientPoolSize", 32, "client pool size")
 	clientMessageHandlerPoolSize := flag.Int("clientMessageHandlerPoolSize", 32, "client message handler pool size")
-	clientNodeCacheSize := flag.Int("clientNodeCacheSize", 64, "client node cache size")
+	clientNodeCacheSize := flag.Int("clientNodeCacheSize", 32, "client node cache size")
 	clientMessageCacheSize := flag.Int("clientMessageCacheSize", 1024, "client message cache size")
 
 	goMaxProcs := flag.Int("goMaxProcs", runtime.NumCPU(), "go max procs")
