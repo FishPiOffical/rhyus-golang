@@ -124,6 +124,7 @@ func (h *webSocketHub) MasterUnregisterHandler() {
 		err := conn.Close()
 		if err != nil {
 			common.Log.Error("close conn failed: %s", err)
+			return
 		}
 	}
 }
@@ -148,6 +149,7 @@ func (h *webSocketHub) ClientUnregisterHandler() {
 		err := conn.Close()
 		if err != nil {
 			common.Log.Error("close conn failed: %s", err)
+			return
 		}
 	}
 }
