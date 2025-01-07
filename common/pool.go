@@ -24,6 +24,7 @@ func (g *GuPool) NewWorkerPool(workCount int) *WorkerPool {
 }
 
 func (wp *WorkerPool) Start() {
+	wp.wg.Add(wp.workCount)
 	for i := 0; i < wp.workCount; i++ {
 		go wp.worker()
 	}
@@ -34,6 +35,7 @@ func (wp *WorkerPool) Start() {
 			}
 		}()
 		for range wp.addWorker {
+			wp.wg.Add(1)
 			go wp.worker()
 		}
 	}()
@@ -41,6 +43,7 @@ func (wp *WorkerPool) Start() {
 
 func (wp *WorkerPool) worker() {
 	defer func() {
+		wp.wg.Done()
 		atomic.AddInt64(&wp.activeCount, -1)
 		if err := recover(); err != nil {
 			Log.Error("Recovered from panic in goroutine: %v\n", err)
@@ -49,12 +52,10 @@ func (wp *WorkerPool) worker() {
 	atomic.AddInt64(&wp.activeCount, 1)
 	for task := range wp.taskQueue {
 		task()
-		wp.wg.Done()
 	}
 }
 
 func (wp *WorkerPool) AddTask(task func()) {
-	wp.wg.Add(1)
 	wp.taskQueue <- task
 }
 
@@ -96,6 +97,7 @@ func (g *GuPool) NewSteadyWorkerPool(workCount int) *SteadyWorkerPool {
 			}
 		}()
 		for i := range wp.addWorker {
+			wp.wg.Add(1)
 			go wp.worker(i)
 		}
 	}()
@@ -105,6 +107,7 @@ func (g *GuPool) NewSteadyWorkerPool(workCount int) *SteadyWorkerPool {
 func (wp *SteadyWorkerPool) AddTask(task func()) {
 	i := len(wp.tasks)
 	wp.tasks = append(wp.tasks, task)
+	wp.wg.Add(1)
 	go wp.worker(i)
 }
 
@@ -116,6 +119,7 @@ func (wp *SteadyWorkerPool) AddTasks(task func(), workCount int) {
 
 func (wp *SteadyWorkerPool) worker(i int) {
 	defer func() {
+		wp.wg.Done()
 		atomic.AddInt64(&wp.activeCount, -1)
 		wp.addWorker <- i
 		if err := recover(); err != nil {
@@ -124,7 +128,6 @@ func (wp *SteadyWorkerPool) worker(i int) {
 	}()
 	atomic.AddInt64(&wp.activeCount, 1)
 	wp.tasks[i]()
-	wp.wg.Done()
 }
 
 func (wp *SteadyWorkerPool) Wait() {
