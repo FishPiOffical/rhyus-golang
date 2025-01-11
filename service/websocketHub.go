@@ -171,8 +171,6 @@ func (h *webSocketHub) masterHandler() {
 
 func (h *webSocketHub) clientHandler() {
 	for conn := range h.ClientNode {
-		// 延迟发送 AllOnlineUsers 列表
-		h.clientOutMessageChan <- &Message{Conn: conn, Data: []byte(h.AllOnlineUsers), Delay: 2 * time.Second}
 		client, ok := h.clients.Load(conn)
 		if ok {
 			userInfo := client.(*activeClient).UserInfo
@@ -184,8 +182,17 @@ func (h *webSocketHub) clientHandler() {
 					util.PostMessageToMaster(conf.Conf.AdminKey, "join", userInfo.UserName)
 				})
 			}
+			// 用户连接数过多则关闭连接
+			if count > conf.Conf.SessionMaxConnection {
+				common.Log.Info("client %s has too many connections: %d", userInfo.UserName, count)
+				h.clientUnregister <- conn
+				continue
+			}
 			h.localOnlineUsernames[userInfo.UserName] = count + 1
 			h.mu.Unlock()
+
+			// 延迟发送 AllOnlineUsers 列表
+			h.clientOutMessageChan <- &Message{Conn: conn, Data: []byte(h.AllOnlineUsers), Delay: 2 * time.Second}
 		}
 	}
 }

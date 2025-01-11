@@ -28,8 +28,9 @@ type AppConf struct {
 	ClientNodeCacheSize          int `json:"clientNodeCacheSize,omitempty"`
 	ClientMessageCacheSize       int `json:"clientMessageCacheSize,omitempty"`
 
-	GoMaxProcs int    `json:"goMaxProcs,omitempty"`
-	LogLevel   string `json:"logLevel,omitempty"`
+	SessionMaxConnection int    `json:"sessionMaxConnection,omitempty"`
+	GoMaxProcs           int    `json:"goMaxProcs,omitempty"`
+	LogLevel             string `json:"logLevel,omitempty"`
 
 	m *sync.Mutex
 }
@@ -77,6 +78,7 @@ func init() {
 	clientNodeCacheSize := flag.Int("clientNodeCacheSize", 32, "client node cache size")
 	clientMessageCacheSize := flag.Int("clientMessageCacheSize", 1024, "client message cache size")
 
+	sessionMaxConnection := flag.Int("sessionMaxConnection", 10, "session max connection")
 	goMaxProcs := flag.Int("goMaxProcs", runtime.NumCPU(), "go max procs")
 	logLevel := flag.String("logLevel", "info", "log level")
 	flag.Parse()
@@ -109,8 +111,9 @@ func init() {
 		ClientNodeCacheSize:          *clientNodeCacheSize,
 		ClientMessageCacheSize:       *clientMessageCacheSize,
 
-		GoMaxProcs: *goMaxProcs,
-		m:          &sync.Mutex{},
+		SessionMaxConnection: *sessionMaxConnection,
+		GoMaxProcs:           *goMaxProcs,
+		m:                    &sync.Mutex{},
 	}
 	ConfigPath = filepath.Join(workSpace, "conf.json")
 	if common.File.IsExist(ConfigPath) {
