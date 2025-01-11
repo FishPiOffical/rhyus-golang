@@ -79,6 +79,7 @@ type SteadyWorkerPool struct {
 	workCount   int
 	activeCount int64
 	addWorker   chan int
+	taskMutex   sync.Mutex
 	wg          sync.WaitGroup
 }
 
@@ -105,8 +106,10 @@ func (g *GuPool) NewSteadyWorkerPool(workCount int) *SteadyWorkerPool {
 }
 
 func (wp *SteadyWorkerPool) AddTask(task func()) {
+	wp.taskMutex.Lock()
 	i := len(wp.tasks)
 	wp.tasks = append(wp.tasks, task)
+	wp.taskMutex.Unlock()
 	wp.wg.Add(1)
 	go wp.worker(i)
 }
@@ -127,7 +130,10 @@ func (wp *SteadyWorkerPool) worker(i int) {
 		}
 	}()
 	atomic.AddInt64(&wp.activeCount, 1)
-	wp.tasks[i]()
+	wp.taskMutex.Lock()
+	f := wp.tasks[i]
+	wp.taskMutex.Unlock()
+	f()
 }
 
 func (wp *SteadyWorkerPool) Wait() {
