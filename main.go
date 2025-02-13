@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"github.com/gin-gonic/gin"
+	"github.com/lesismal/nbio/nbhttp"
+	"os"
+	"os/signal"
 	"rhyus-golang/api"
 	"rhyus-golang/common"
 	"rhyus-golang/conf"
 	"rhyus-golang/middlewares"
 	"rhyus-golang/service"
 	"strconv"
+	"time"
 )
 
 func main() {
@@ -27,17 +32,23 @@ func main() {
 	api.ServeAPI(ginServer)
 
 	addr := conf.Conf.Host + ":" + strconv.Itoa(conf.Conf.Port)
+	engine := nbhttp.NewEngine(nbhttp.Config{
+		Network: "tcp",
+		Addrs:   []string{addr},
+		Handler: ginServer,
+	})
 	common.Log.Info("server start at: %s", addr)
-	if conf.Conf.Ssl.Enabled {
-		err := ginServer.RunTLS(addr, conf.Conf.Ssl.CertPath, conf.Conf.Ssl.KeyPath)
-		if err != nil {
-			common.Log.Fatal(common.ExitCodeCertificateErr, "serve start failed: %s", err)
-		}
-	} else {
-		err := ginServer.Run(addr)
-		if err != nil {
-			common.Log.Fatal(common.ExitCodeUnavailablePort, "serve start failed: %s", err)
-		}
+	err := engine.Start()
+	if err != nil {
+		common.Log.Fatal(common.ExitCodeUnavailablePort, "serve start failed: %s", err)
 	}
+
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+	<-interrupt
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+	engine.Shutdown(ctx)
 
 }
