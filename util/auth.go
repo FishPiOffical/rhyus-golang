@@ -44,6 +44,10 @@ func GetUserInfo(apiKey string) *model.UserInfo {
 		common.Log.Error("parse response failed: %s", err)
 		return nil
 	}
+	if result.Code != 0 {
+		common.Log.Error("get user info failed: %s", result.Msg)
+		return nil
+	}
 	return &result.Data
 }
 

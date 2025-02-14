@@ -17,16 +17,6 @@ type AppConf struct {
 	Ssl       *Ssl   `json:"ssl,omitempty"`
 	MasterUrl string `json:"masterUrl,omitempty"`
 	AdminKey  string `json:"adminKey,omitempty"`
-	Heartbeat int    `json:"heartbeat,omitempty"`
-
-	MasterPoolSize         int `json:"masterPoolSize,omitempty"`
-	MasterNodeCacheSize    int `json:"masterNodeCacheSize,omitempty"`
-	MasterMessageCacheSize int `json:"masterMessageCacheSize,omitempty"`
-
-	ClientPoolSize               int `json:"clientPoolSize,omitempty"`
-	ClientMessageHandlerPoolSize int `json:"clientMessageHandlerPoolSize,omitempty"`
-	ClientNodeCacheSize          int `json:"clientNodeCacheSize,omitempty"`
-	ClientMessageCacheSize       int `json:"clientMessageCacheSize,omitempty"`
 
 	SessionMaxConnection int    `json:"sessionMaxConnection,omitempty"`
 	GoMaxProcs           int    `json:"goMaxProcs,omitempty"`
@@ -67,16 +57,6 @@ func init() {
 	keyPath := flag.String("keyPath", "", "path of SSL key")
 	masterUrl := flag.String("masterUrl", "https://fishpi.cn", "master server URL")
 	adminKey := flag.String("adminKey", "", "admin key")
-	heartbeat := flag.Int("heartbeat", 10, "heartbeat interval")
-
-	masterPoolSize := flag.Int("masterPoolSize", 8, "master pool size")
-	masterNodeCacheSize := flag.Int("masterNodeCacheSize", 8, "master node cache size")
-	masterMessageCacheSize := flag.Int("masterMessageCacheSize", 32, "master message cache size")
-
-	clientPoolSize := flag.Int("clientPoolSize", 32, "client pool size")
-	clientMessageHandlerPoolSize := flag.Int("clientMessageHandlerPoolSize", 32, "client message handler pool size")
-	clientNodeCacheSize := flag.Int("clientNodeCacheSize", 32, "client node cache size")
-	clientMessageCacheSize := flag.Int("clientMessageCacheSize", 1024, "client message cache size")
 
 	sessionMaxConnection := flag.Int("sessionMaxConnection", 10, "session max connection")
 	goMaxProcs := flag.Int("goMaxProcs", runtime.NumCPU(), "go max procs")
@@ -100,16 +80,6 @@ func init() {
 		},
 		MasterUrl: *masterUrl,
 		AdminKey:  *adminKey,
-		Heartbeat: *heartbeat,
-
-		MasterPoolSize:         *masterPoolSize,
-		MasterNodeCacheSize:    *masterNodeCacheSize,
-		MasterMessageCacheSize: *masterMessageCacheSize,
-
-		ClientPoolSize:               *clientPoolSize,
-		ClientMessageHandlerPoolSize: *clientMessageHandlerPoolSize,
-		ClientNodeCacheSize:          *clientNodeCacheSize,
-		ClientMessageCacheSize:       *clientMessageCacheSize,
 
 		SessionMaxConnection: *sessionMaxConnection,
 		GoMaxProcs:           *goMaxProcs,
