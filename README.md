@@ -19,6 +19,7 @@ Rhythm 开源子节点系统的 go 语言实现，实现聊天室 WebSocket 多�
 | **masterUrl**            | `https://fishpi.cn` | 主服务端地址                                |
 | **adminKey**             | `123456`            | 管理员密钥                                 |
 | **SessionMaxConnection** | `10`                | 用户最大会话数                               |
+| **keepaliveTime**        | `2`                 | 会话最大时间（分钟）                            |
 | **goMaxProcs**           | `20`                | Go 运行时使用的最大 CPU 核心数                   |
 | **logLevel**             | `info`              | 日志等级（info, debug, warn, error, fatal） |
 

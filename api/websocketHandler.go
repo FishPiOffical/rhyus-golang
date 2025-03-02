@@ -9,6 +9,7 @@ import (
 	"rhyus-golang/model"
 	"rhyus-golang/service"
 	"rhyus-golang/util"
+	"time"
 )
 
 var upgrade *websocket.Upgrader
@@ -22,6 +23,7 @@ func init() {
 
 // ChatroomWebSocket 将连接加入在线列表
 func ChatroomWebSocket(c *gin.Context) {
+	upgrade.KeepaliveTime = time.Minute * time.Duration(conf.Conf.KeepaliveTime)
 	if util.GetApiKey(c) == conf.Conf.AdminKey {
 		// 服务端连接
 		upgrade.OnOpen(func(conn *websocket.Conn) {

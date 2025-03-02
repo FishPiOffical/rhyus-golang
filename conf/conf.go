@@ -11,14 +11,14 @@ import (
 )
 
 type AppConf struct {
-	Host      string `json:"host,omitempty"`
-	Port      int    `json:"port,omitempty"`
-	Pprof     *Pprof `json:"pprof,omitempty"`
-	Ssl       *Ssl   `json:"ssl,omitempty"`
-	MasterUrl string `json:"masterUrl,omitempty"`
-	AdminKey  string `json:"adminKey,omitempty"`
-
-	SessionMaxConnection int    `json:"sessionMaxConnection,omitempty"`
+	Host                 string `json:"host,omitempty"`
+	Port                 int    `json:"port,omitempty"`
+	Pprof                *Pprof `json:"pprof,omitempty"`
+	Ssl                  *Ssl   `json:"ssl,omitempty"`
+	MasterUrl            string `json:"masterUrl,omitempty"`
+	AdminKey             string `json:"adminKey,omitempty"`
+	SessionMaxConnection int64  `json:"sessionMaxConnection,omitempty"`
+	KeepaliveTime        int64  `json:"keepaliveTime,omitempty"`
 	GoMaxProcs           int    `json:"goMaxProcs,omitempty"`
 	LogLevel             string `json:"logLevel,omitempty"`
 
@@ -57,8 +57,8 @@ func init() {
 	keyPath := flag.String("keyPath", "./key.pem", "path of SSL key")
 	masterUrl := flag.String("masterUrl", "https://fishpi.cn", "master server URL")
 	adminKey := flag.String("adminKey", "123456", "admin key")
-
-	sessionMaxConnection := flag.Int("sessionMaxConnection", 10, "session max connection")
+	sessionMaxConnection := flag.Int64("sessionMaxConnection", 10, "session max connection")
+	keepaliveTime := flag.Int64("keepaliveTime", 2, "keepalive time of the websocket connection")
 	goMaxProcs := flag.Int("goMaxProcs", runtime.NumCPU(), "go max procs")
 	logLevel := flag.String("logLevel", "info", "log level")
 	flag.Parse()
@@ -82,6 +82,7 @@ func init() {
 		AdminKey:  *adminKey,
 
 		SessionMaxConnection: *sessionMaxConnection,
+		KeepaliveTime:        *keepaliveTime,
 		GoMaxProcs:           *goMaxProcs,
 		m:                    &sync.Mutex{},
 	}
@@ -100,6 +101,8 @@ func init() {
 	runtime.GOMAXPROCS(Conf.GoMaxProcs)
 	common.Log.SetLogLevel(Conf.LogLevel)
 	common.Log.Info("log level: [%s] save path: [%s]", Conf.LogLevel, common.LogPath)
+	marshal, _ := json.Marshal(Conf)
+	common.Log.Info("conf: %s", marshal)
 	Conf.Save()
 }
 

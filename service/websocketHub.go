@@ -22,9 +22,9 @@ type webSocketHub struct {
 	masterNum            int
 	clients              sync.Map
 	clientNum            int
-	AllOnlineUsers       string         // 所有在线用户
-	localOnlineUsernames map[string]int // 本地在线用户名
-	mu                   sync.Mutex     // 保护 localOnlineUsernames 的并发安全
+	AllOnlineUsers       string           // 所有在线用户
+	localOnlineUsernames map[string]int64 // 本地在线用户名
+	mu                   sync.Mutex       // 保护 localOnlineUsernames 的并发安全
 }
 
 type activeMaster struct {
@@ -43,8 +43,8 @@ func init() {
 		masterNum:            0,
 		clients:              sync.Map{}, // key:*websocket.Conn value:*activeClient
 		clientNum:            0,
-		AllOnlineUsers:       "{}",                 // 所有在线用户
-		localOnlineUsernames: make(map[string]int), // key:username value:true
+		AllOnlineUsers:       "{}",                   // 所有在线用户
+		localOnlineUsernames: make(map[string]int64), // key:username value:true
 	}
 
 	pool := sync2.NewPool(context.Background())
