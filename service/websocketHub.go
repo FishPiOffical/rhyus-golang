@@ -11,6 +11,7 @@ import (
 	"rhyus-golang/util"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -19,9 +20,9 @@ var Hub *webSocketHub
 // webSocketHub WebSocket 连接池
 type webSocketHub struct {
 	masters              sync.Map
-	masterNum            int
+	masterNum            int64
 	clients              sync.Map
-	clientNum            int
+	clientNum            int64
 	AllOnlineUsers       string           // 所有在线用户
 	localOnlineUsernames map[string]int64 // 本地在线用户名
 	mu                   sync.Mutex       // 保护 localOnlineUsernames 的并发安全
@@ -57,8 +58,18 @@ func init() {
 func (h *webSocketHub) heartbeat() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	for _ = range ticker.C {
-		common.Log.Info("active master: %d active client: %d", h.masterNum, h.clientNum)
+	for range ticker.C {
+		h.masters.Range(func(key, value any) bool {
+			master := value.(*activeMaster)
+			h.sendMessage(&Message{Conn: master.Conn, Data: []byte("heartbeat")})
+			return true
+		})
+		h.clients.Range(func(key, value any) bool {
+			client := value.(*activeClient)
+			h.sendMessage(&Message{Conn: client.Conn, Data: []byte("heartbeat")})
+			return true
+		})
+		common.Log.Info("active master: %d active client: %d", atomic.LoadInt64(&h.masterNum), atomic.LoadInt64(&h.clientNum))
 	}
 }
 
@@ -73,7 +84,15 @@ func (h *webSocketHub) MasterRegister(conn *websocket.Conn) {
 		Conn: conn,
 	}
 	h.masters.LoadOrStore(conn, master)
-	h.masterNum++
+	atomic.AddInt64(&h.masterNum, 1)
+}
+
+func (h *webSocketHub) GetUser(conn *websocket.Conn) *model.UserInfo {
+	userInfo, ok := h.clients.Load(conn)
+	if ok {
+		return userInfo.(*activeClient).UserInfo
+	}
+	return nil
 }
 
 func (h *webSocketHub) ClientRegister(conn *websocket.Conn, userInfo *model.UserInfo) {
@@ -97,7 +116,7 @@ func (h *webSocketHub) ClientRegister(conn *websocket.Conn, userInfo *model.User
 		return
 	}
 	h.localOnlineUsernames[userInfo.UserName] = count + 1
-	h.clientNum++
+	atomic.AddInt64(&h.clientNum, 1)
 	// 延迟发送 AllOnlineUsers 列表
 	h.sendMessage(&Message{Conn: conn, Data: []byte(h.AllOnlineUsers), Delay: 2 * time.Second})
 }
@@ -106,7 +125,7 @@ func (h *webSocketHub) MasterUnregister(conn *websocket.Conn) {
 	_, ok := h.masters.LoadAndDelete(conn)
 	if ok {
 		common.Log.Info("master has leaved: %s", conn.RemoteAddr().String())
-		h.masterNum--
+		atomic.AddInt64(&h.masterNum, -1)
 	}
 	err := conn.Close()
 	if err != nil {
@@ -128,7 +147,7 @@ func (h *webSocketHub) ClientUnregister(conn *websocket.Conn) {
 			h.localOnlineUsernames[userInfo.UserName] = count - 1
 		}
 		h.mu.Unlock()
-		h.clientNum--
+		atomic.AddInt64(&h.clientNum, -1)
 	}
 	err := conn.Close()
 	if err != nil {
