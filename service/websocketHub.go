@@ -278,7 +278,7 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 					client := value.(*activeClient)
 					if client.LastActive.Add(time.Hour * 6).Before(time.Now()) {
 						common.Log.Info("clear: %s", client.UserInfo.UserName)
-						data[client.UserInfo.UserName] = time.Now().Second() - client.LastActive.Second()
+						data[client.UserInfo.UserName] = time.Now().Hour() - client.LastActive.Hour()
 						h.ClientUnregister(conn)
 					}
 					return true
