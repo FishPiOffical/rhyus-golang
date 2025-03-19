@@ -59,16 +59,16 @@ func (h *webSocketHub) heartbeat() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		h.masters.Range(func(key, value any) bool {
-			master := value.(*activeMaster)
-			h.sendMessage(&Message{Conn: master.Conn, Data: []byte("heartbeat")})
-			return true
-		})
-		h.clients.Range(func(key, value any) bool {
-			client := value.(*activeClient)
-			h.sendMessage(&Message{Conn: client.Conn, Data: []byte("heartbeat")})
-			return true
-		})
+		//h.masters.Range(func(key, value any) bool {
+		//	master := value.(*activeMaster)
+		//	h.sendMessage(&Message{Conn: master.Conn, Data: []byte("heartbeat")})
+		//	return true
+		//})
+		//h.clients.Range(func(key, value any) bool {
+		//	client := value.(*activeClient)
+		//	h.sendMessage(&Message{Conn: client.Conn, Data: []byte("heartbeat")})
+		//	return true
+		//})
 		common.Log.Info("active master: %d active client: %d", atomic.LoadInt64(&h.masterNum), atomic.LoadInt64(&h.clientNum))
 	}
 }
@@ -289,7 +289,7 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 					common.Log.Error("marshal clear result failed: %s", err)
 				}
 				common.Log.Info("[clear]: number %d list %s", len(data), string(result))
-				common.Log.Info(" ---> master %s: %s", message.Conn.RemoteAddr().String(), string(message.Data))
+				common.Log.Info(" ---> master %s: %s", message.Conn.RemoteAddr().String(), result)
 				h.sendMessage(&Message{Conn: message.Conn, Data: result})
 			}
 		}
