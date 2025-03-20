@@ -57,7 +57,7 @@ func init() {
 	keyPath := flag.String("keyPath", "./key.pem", "path of SSL key")
 	masterUrl := flag.String("masterUrl", "https://fishpi.cn", "master server URL")
 	adminKey := flag.String("adminKey", "123456", "admin key")
-	sessionMaxConnection := flag.Int64("sessionMaxConnection", 10, "session max connection")
+	sessionMaxConnection := flag.Int64("sessionMaxConnection", 5, "session max connection")
 	keepaliveTime := flag.Int64("keepaliveTime", 2, "keepalive time of the websocket connection")
 	goMaxProcs := flag.Int("goMaxProcs", runtime.NumCPU(), "go max procs")
 	logLevel := flag.String("logLevel", "info", "log level")

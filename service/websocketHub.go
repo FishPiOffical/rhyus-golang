@@ -103,20 +103,31 @@ func (h *webSocketHub) ClientRegister(conn *websocket.Conn, userInfo *model.User
 	}
 	h.clients.LoadOrStore(conn, client)
 
-	count := h.localOnlineUsernames[userInfo.UserName]
 	h.mu.Lock()
-	defer h.mu.Unlock()
+	count := h.localOnlineUsernames[userInfo.UserName]
+	h.localOnlineUsernames[userInfo.UserName] = count + 1
+	h.mu.Unlock()
+	atomic.AddInt64(&h.clientNum, 1)
+
 	if count < 1 {
 		util.PostMessageToMaster(conf.Conf.AdminKey, "join", userInfo.UserName)
 	}
-	// 用户连接数过多则关闭连接
+	// 用户连接数过多则关闭最早的连接
 	if count > conf.Conf.SessionMaxConnection {
 		common.Log.Info("client %s has too many connections: %d", userInfo.UserName, count)
-		h.ClientUnregister(conn)
+		firstClient := client
+		h.clients.Range(func(key, value any) bool {
+			client := value.(*activeClient)
+			if client.UserInfo.UserName == userInfo.UserName {
+				if client.LastActive.Before(firstClient.LastActive) {
+					firstClient = client
+				}
+			}
+			return true
+		})
+		h.ClientUnregister(firstClient.Conn)
 		return
 	}
-	h.localOnlineUsernames[userInfo.UserName] = count + 1
-	atomic.AddInt64(&h.clientNum, 1)
 	// 延迟发送 AllOnlineUsers 列表
 	h.sendMessage(&Message{Conn: conn, Data: []byte(h.AllOnlineUsers), Delay: 2 * time.Second})
 }
@@ -137,16 +148,16 @@ func (h *webSocketHub) MasterUnregister(conn *websocket.Conn) {
 func (h *webSocketHub) ClientUnregister(conn *websocket.Conn) {
 	client, ok := h.clients.LoadAndDelete(conn)
 	if ok {
-		userInfo := client.(*activeClient).UserInfo
-		common.Log.Info("client %s has leaved: %s", userInfo.UserName, conn.RemoteAddr().String())
+		c := client.(*activeClient)
+		userInfo := c.UserInfo
+		common.Log.Info("client %s has leaved: %s loginTime: %s", userInfo.UserName, conn.RemoteAddr().String(), c.LastActive.Format("2006-01-02 15:04:05"))
 		h.mu.Lock()
 		count := h.localOnlineUsernames[userInfo.UserName]
+		h.localOnlineUsernames[userInfo.UserName] = count - 1
+		h.mu.Unlock()
 		if count < 1 {
 			util.PostMessageToMaster(conf.Conf.AdminKey, "leave", userInfo.UserName)
-		} else {
-			h.localOnlineUsernames[userInfo.UserName] = count - 1
 		}
-		h.mu.Unlock()
 		atomic.AddInt64(&h.clientNum, -1)
 	}
 	err := conn.Close()
