@@ -76,3 +76,15 @@ func Authorize(c *gin.Context) {
 
 	c.Next()
 }
+
+func Limiter(c *gin.Context) {
+	apiKey := util.GetApiKey(c)
+	if apiKey != conf.Conf.AdminKey {
+		if !util.GlobalLimiter.Allow() || !util.GetApiKeyLimiter(apiKey).Allow() {
+			common.Log.Info("apiKey has too many request: %s", apiKey)
+			model.TooManyRequests(c)
+			return
+		}
+	}
+	c.Next()
+}

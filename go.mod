@@ -6,6 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/lesismal/nbio v1.6.2
 	golang.org/x/sync v0.11.0
+	golang.org/x/time v0.11.0
 )
 
 require (

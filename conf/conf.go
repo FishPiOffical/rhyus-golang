@@ -11,16 +11,21 @@ import (
 )
 
 type AppConf struct {
-	Host                 string `json:"host,omitempty"`
-	Port                 int    `json:"port,omitempty"`
-	Pprof                *Pprof `json:"pprof,omitempty"`
-	Ssl                  *Ssl   `json:"ssl,omitempty"`
-	MasterUrl            string `json:"masterUrl,omitempty"`
-	AdminKey             string `json:"adminKey,omitempty"`
-	SessionMaxConnection int64  `json:"sessionMaxConnection,omitempty"`
-	KeepaliveTime        int64  `json:"keepaliveTime,omitempty"`
-	GoMaxProcs           int    `json:"goMaxProcs,omitempty"`
-	LogLevel             string `json:"logLevel,omitempty"`
+	Host  string `json:"host,omitempty"`
+	Port  int    `json:"port,omitempty"`
+	Pprof *Pprof `json:"pprof,omitempty"`
+	Ssl   *Ssl   `json:"ssl,omitempty"`
+
+	MasterUrl string `json:"masterUrl,omitempty"`
+	AdminKey  string `json:"adminKey,omitempty"`
+
+	SessionMaxConnection int64 `json:"sessionMaxConnection,omitempty"`
+	SessionApikeyLimiter int   `json:"sessionApikeyLimiter,omitempty"`
+	SessionGlobalLimiter int   `json:"sessionGlobalLimiter,omitempty"`
+	KeepaliveTime        int64 `json:"keepaliveTime,omitempty"`
+
+	GoMaxProcs int    `json:"goMaxProcs,omitempty"`
+	LogLevel   string `json:"logLevel,omitempty"`
 
 	m *sync.Mutex
 }
@@ -48,17 +53,24 @@ func init() {
 	}
 	host := flag.String("host", "0.0.0.0", "host of the HTTP server")
 	port := flag.Int("port", 10831, "port of the HTTP server")
+
 	pprof := flag.Bool("pprof", true, "enable pprof")
 	pprofPort := flag.Int("pprofPort", 10832, "port of the pprof server")
 	maxFile := flag.Int("maxFile", 6, "max file number of pprof")
 	sampleTime := flag.Int("sampleTime", 10, "sample time of pprof")
+
 	ssl := flag.Bool("ssl", false, "enable SSL")
 	certPath := flag.String("certPath", "./cert.pem", "path of SSL certificate")
 	keyPath := flag.String("keyPath", "./key.pem", "path of SSL key")
+
 	masterUrl := flag.String("masterUrl", "https://fishpi.cn", "master server URL")
 	adminKey := flag.String("adminKey", "123456", "admin key")
+
 	sessionMaxConnection := flag.Int64("sessionMaxConnection", 5, "session max connection")
+	sessionLimiter := flag.Int("sessionLimiter", 10, "session apikey limiter")
+	sessionGlobalLimiter := flag.Int("sessionGlobalLimiter", 120, "session global limiter")
 	keepaliveTime := flag.Int64("keepaliveTime", 2, "keepalive time of the websocket connection")
+
 	goMaxProcs := flag.Int("goMaxProcs", runtime.NumCPU(), "go max procs")
 	logLevel := flag.String("logLevel", "info", "log level")
 	flag.Parse()
@@ -82,9 +94,12 @@ func init() {
 		AdminKey:  *adminKey,
 
 		SessionMaxConnection: *sessionMaxConnection,
+		SessionApikeyLimiter: *sessionLimiter,
+		SessionGlobalLimiter: *sessionGlobalLimiter,
 		KeepaliveTime:        *keepaliveTime,
-		GoMaxProcs:           *goMaxProcs,
-		m:                    &sync.Mutex{},
+
+		GoMaxProcs: *goMaxProcs,
+		m:          &sync.Mutex{},
 	}
 	ConfigPath = filepath.Join(workSpace, "conf.json")
 	if common.File.IsExist(ConfigPath) {

@@ -26,6 +26,7 @@ func main() {
 		middlewares.Recover,
 		middlewares.Logging,
 		middlewares.CorsMiddleware,
+		middlewares.Limiter,
 		middlewares.Authorize,
 	)
 
