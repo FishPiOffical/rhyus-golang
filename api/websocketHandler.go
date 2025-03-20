@@ -33,7 +33,6 @@ func ChatroomWebSocket(c *gin.Context) {
 		// 服务端连接
 		masterUpgrade.KeepaliveTime = time.Minute * time.Duration(conf.Conf.KeepaliveTime)
 		masterUpgrade.OnOpen(func(conn *websocket.Conn) {
-			common.Log.Info("master has joined: %s", conn.RemoteAddr().String())
 			service.Hub.MasterRegister(conn)
 		})
 		masterUpgrade.OnClose(func(conn *websocket.Conn, err error) {
@@ -50,7 +49,6 @@ func ChatroomWebSocket(c *gin.Context) {
 		clientUpgrade.OnOpen(func(conn *websocket.Conn) {
 			info, _ := c.Get("userInfo")
 			userInfo := info.(*model.UserInfo)
-			common.Log.Info("client %s has joined: %s", userInfo.UserName, conn.RemoteAddr().String())
 			service.Hub.ClientRegister(conn, userInfo)
 		})
 		clientUpgrade.OnMessage(func(conn *websocket.Conn, messageType websocket.MessageType, data []byte) {

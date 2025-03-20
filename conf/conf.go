@@ -19,10 +19,11 @@ type AppConf struct {
 	MasterUrl string `json:"masterUrl,omitempty"`
 	AdminKey  string `json:"adminKey,omitempty"`
 
-	SessionMaxConnection int64 `json:"sessionMaxConnection,omitempty"`
-	SessionApikeyLimiter int   `json:"sessionApikeyLimiter,omitempty"`
-	SessionGlobalLimiter int   `json:"sessionGlobalLimiter,omitempty"`
-	KeepaliveTime        int64 `json:"keepaliveTime,omitempty"`
+	SessionMaxConnection          int64 `json:"sessionMaxConnection,omitempty"`
+	SessionApikeyLimiter          int   `json:"sessionApikeyLimiter,omitempty"`
+	SessionApikeyLimiterCacheSize int   `json:"sessionApikeyLimiterCacheSize,omitempty"`
+	SessionGlobalLimiter          int   `json:"sessionGlobalLimiter,omitempty"`
+	KeepaliveTime                 int64 `json:"keepaliveTime,omitempty"`
 
 	GoMaxProcs int    `json:"goMaxProcs,omitempty"`
 	LogLevel   string `json:"logLevel,omitempty"`
@@ -67,7 +68,8 @@ func init() {
 	adminKey := flag.String("adminKey", "123456", "admin key")
 
 	sessionMaxConnection := flag.Int64("sessionMaxConnection", 5, "session max connection")
-	sessionLimiter := flag.Int("sessionLimiter", 10, "session apikey limiter")
+	sessionApikeyLimiter := flag.Int("sessionApikeyLimiter", 10, "session apikey limiter")
+	sessionApikeyLimiterCacheSize := flag.Int("sessionApikeyLimiterCacheSize", 256, "session global limiter")
 	sessionGlobalLimiter := flag.Int("sessionGlobalLimiter", 120, "session global limiter")
 	keepaliveTime := flag.Int64("keepaliveTime", 2, "keepalive time of the websocket connection")
 
@@ -93,10 +95,11 @@ func init() {
 		MasterUrl: *masterUrl,
 		AdminKey:  *adminKey,
 
-		SessionMaxConnection: *sessionMaxConnection,
-		SessionApikeyLimiter: *sessionLimiter,
-		SessionGlobalLimiter: *sessionGlobalLimiter,
-		KeepaliveTime:        *keepaliveTime,
+		SessionMaxConnection:          *sessionMaxConnection,
+		SessionApikeyLimiter:          *sessionApikeyLimiter,
+		SessionApikeyLimiterCacheSize: *sessionApikeyLimiterCacheSize,
+		SessionGlobalLimiter:          *sessionGlobalLimiter,
+		KeepaliveTime:                 *keepaliveTime,
 
 		GoMaxProcs: *goMaxProcs,
 		m:          &sync.Mutex{},

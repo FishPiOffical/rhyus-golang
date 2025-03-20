@@ -80,6 +80,7 @@ type Message struct {
 }
 
 func (h *webSocketHub) MasterRegister(conn *websocket.Conn) {
+	common.Log.Info("master has joined: %s", conn.RemoteAddr().String())
 	master := &activeMaster{
 		Conn: conn,
 	}
@@ -102,7 +103,7 @@ func (h *webSocketHub) ClientRegister(conn *websocket.Conn, userInfo *model.User
 		LastActive: time.Now(),
 	}
 	h.clients.LoadOrStore(conn, client)
-
+	common.Log.Info("client %s has joined: %s", userInfo.UserName, conn.RemoteAddr().String())
 	h.mu.Lock()
 	count := h.localOnlineUsernames[userInfo.UserName]
 	h.localOnlineUsernames[userInfo.UserName] = count + 1
@@ -155,10 +156,10 @@ func (h *webSocketHub) ClientUnregister(conn *websocket.Conn) {
 		count := h.localOnlineUsernames[userInfo.UserName]
 		h.localOnlineUsernames[userInfo.UserName] = count - 1
 		h.mu.Unlock()
+		atomic.AddInt64(&h.clientNum, -1)
 		if count < 1 {
 			util.PostMessageToMaster(conf.Conf.AdminKey, "leave", userInfo.UserName)
 		}
-		atomic.AddInt64(&h.clientNum, -1)
 	}
 	err := conn.Close()
 	if err != nil {

@@ -1,21 +1,27 @@
 package util
 
 import (
+	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/time/rate"
+	"rhyus-golang/common"
 	"rhyus-golang/conf"
 	"sync"
 	"time"
 )
 
 var GlobalLimiter = rate.NewLimiter(rate.Every(1*60*time.Second), conf.Conf.SessionGlobalLimiter)
-var visitors = make(map[string]*rate.Limiter)
+var visitors, _ = lru.New[string, *rate.Limiter](conf.Conf.SessionApikeyLimiterCacheSize)
 var mu sync.Mutex
 
 func GetApiKeyLimiter(apikey string) *rate.Limiter {
-	mu.Lock()
-	defer mu.Unlock()
-	if _, exists := visitors[apikey]; !exists {
-		visitors[apikey] = rate.NewLimiter(rate.Every(1*60*time.Second), conf.Conf.SessionApikeyLimiter)
+
+	limiter, ok := visitors.Get(apikey)
+	if ok {
+		return limiter
+	} else {
+		limiter = rate.NewLimiter(rate.Every(1*60*time.Second), conf.Conf.SessionApikeyLimiter)
+		visitors.Add(apikey, limiter)
+		common.Log.Info("size {}", visitors.Len())
+		return limiter
 	}
-	return visitors[apikey]
 }
