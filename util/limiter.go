@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var GlobalLimiter = rate.NewLimiter(rate.Every(1*60*time.Second), conf.Conf.SessionGlobalLimiter)
+var GlobalLimiter = rate.NewLimiter(rate.Every(time.Minute/time.Duration(conf.Conf.SessionGlobalLimiter)), conf.Conf.SessionGlobalLimiter)
 var visitors, _ = lru.New[string, *rate.Limiter](conf.Conf.SessionApikeyLimiterCacheSize)
 var mu sync.Mutex
 
@@ -19,7 +19,7 @@ func GetApiKeyLimiter(apikey string) *rate.Limiter {
 	if ok {
 		return limiter
 	} else {
-		limiter = rate.NewLimiter(rate.Every(1*60*time.Second), conf.Conf.SessionApikeyLimiter)
+		limiter = rate.NewLimiter(rate.Every(time.Minute/time.Duration(conf.Conf.SessionApikeyLimiter)), conf.Conf.SessionApikeyLimiter)
 		visitors.Add(apikey, limiter)
 		common.Log.Info("size {}", visitors.Len())
 		return limiter

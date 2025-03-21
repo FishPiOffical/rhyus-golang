@@ -245,17 +245,12 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 				})
 				common.Log.Info("[slow] --> %d clients : %s", num, content)
 			} else if command == "online" {
-				onlineUsersSet := make(map[string]*model.UserInfo)
+				onlineUsers := make([]*model.UserInfo, 0)
 				h.clients.Range(func(key, value any) bool {
 					client := value.(*activeClient)
-					onlineUsersSet[client.UserInfo.OId] = client.UserInfo
+					onlineUsers = append(onlineUsers, client.UserInfo)
 					return true
 				})
-				onlineUsers := make([]*model.UserInfo, 0)
-				for _, userInfo := range onlineUsersSet {
-					onlineUsers = append(onlineUsers, userInfo)
-				}
-
 				result, err := json.Marshal(onlineUsers)
 				if err != nil {
 					common.Log.Error("marshal online users failed: %s", err)
