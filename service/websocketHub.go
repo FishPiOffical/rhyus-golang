@@ -181,7 +181,7 @@ func (h *webSocketHub) sendMessage(message *Message) {
 func (h *webSocketHub) HandleMasterMessage(message *Message) {
 	msg := string(message.Data)
 	if strings.Contains(msg, ":::") {
-		split := strings.Split(msg, ":::")
+		split := strings.SplitN(msg, ":::", 2)
 		if len(split) == 2 && split[0] == conf.Conf.AdminKey {
 			command := split[1]
 			if command == "hello" {
