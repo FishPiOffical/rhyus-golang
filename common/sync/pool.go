@@ -46,6 +46,7 @@ func (t *tasks) startTasks() {
 		}
 	}()
 }
+
 func (t *tasks) startTask(sem *semaphore.Weighted) {
 	if err := sem.Acquire(t.ctx, 1); err != nil {
 		common.Log.Error("Failed to acquire semaphore: %v", err)
@@ -59,6 +60,7 @@ func (t *tasks) startTask(sem *semaphore.Weighted) {
 	})
 	go func(ctx context.Context) {
 		defer func() {
+			sem.Release(1)
 			if err := recover(); err != nil {
 				common.Log.Error("Recovered from panic in %s goroutine: %v\n", t.name, err)
 			}
@@ -68,7 +70,6 @@ func (t *tasks) startTask(sem *semaphore.Weighted) {
 		if err != nil {
 			common.Log.Error("Failed to startTasks task: %v", err)
 		}
-		sem.Release(1)
 	}(ctx)
 }
 

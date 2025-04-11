@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/lesismal/nbio/nbhttp/websocket"
+	"golang.org/x/time/rate"
 	"rhyus-golang/common"
 	sync2 "rhyus-golang/common/sync"
 	"rhyus-golang/conf"
@@ -23,6 +24,9 @@ type webSocketHub struct {
 	masterNum            int64
 	clients              sync.Map
 	clientNum            int64
+	fastQueue            chan *Message
+	normalQueue          chan *Message
+	slowQueue            chan *Message
 	AllOnlineUsers       string           // 所有在线用户
 	localOnlineUsernames map[string]int64 // 本地在线用户名
 	mu                   sync.Mutex       // 保护 localOnlineUsernames 的并发安全
@@ -44,6 +48,9 @@ func init() {
 		masterNum:            0,
 		clients:              sync.Map{}, // key:*websocket.Conn value:*activeClient
 		clientNum:            0,
+		fastQueue:            make(chan *Message, 1024),
+		normalQueue:          make(chan *Message, 1024),
+		slowQueue:            make(chan *Message, 1024),
 		AllOnlineUsers:       "{}",                   // 所有在线用户
 		localOnlineUsernames: make(map[string]int64), // key:username value:true
 	}
@@ -51,6 +58,34 @@ func init() {
 	pool := sync2.NewPool(context.Background())
 	pool.SubmitTask("heartbeat", func(ctx context.Context) (err error) {
 		Hub.heartbeat()
+		return nil
+	})
+	pool.SubmitTasks("slowQueue", conf.Conf.SlowQueueThreadNum, func(ctx context.Context) (err error) {
+		Hub.slowQueueHandler(ctx)
+		return nil
+	})
+	pool.SubmitTasks("normalQueue", conf.Conf.NormalQueueThreadNum, func(ctx context.Context) (err error) {
+		Hub.normalQueueHandler(ctx)
+		return nil
+	})
+	pool.SubmitTasks("fastQueue", conf.Conf.FastQueueThreadNum, func(ctx context.Context) (err error) {
+		Hub.fastQueueHandler(ctx)
+		return nil
+	})
+	pool.SubmitTask("monitorFastQueue", func(ctx context.Context) (err error) {
+		// 监控紧急队列以调整一般队列的限速
+		ticker := time.NewTicker(time.Millisecond * 100)
+		defer ticker.Stop()
+		l := 0
+		for range ticker.C {
+			l = len(Hub.fastQueue)
+			if l != 0 {
+				common.Log.Debug("fastQueue length: %d", l)
+				util.NormalQueueLimiter.SetLimit(rate.Every(time.Second / time.Duration(util.FastNormalBandwidth)))
+			} else {
+				util.NormalQueueLimiter.SetLimit(rate.Every(time.Second / time.Duration(util.NormalBandwidth)))
+			}
+		}
 		return nil
 	})
 }
@@ -74,9 +109,23 @@ func (h *webSocketHub) heartbeat() {
 }
 
 type Message struct {
-	Conn  *websocket.Conn
-	Data  []byte
-	Delay time.Duration
+	Conn     *websocket.Conn
+	Data     []byte
+	Priority MessagePriority
+	Delay    time.Duration
+}
+
+type MessagePriority int
+
+const (
+	NoPriorityMessage MessagePriority = iota
+	NormalMessage
+	FastMessage
+	SlowMessage
+)
+
+func (p MessagePriority) String() string {
+	return [...]string{"noPriority", "normal", "fast", "slow"}[p]
 }
 
 func (h *webSocketHub) MasterRegister(conn *websocket.Conn) {
@@ -172,10 +221,57 @@ func (h *webSocketHub) sendMessage(message *Message) {
 	time.AfterFunc(message.Delay, func() {
 		err := message.Conn.WriteMessage(websocket.TextMessage, message.Data)
 		if err != nil {
+			common.Log.Error("send message failed with %s : %s", err, string(message.Data))
 			h.ClientUnregister(message.Conn)
 			return
 		}
 	})
+}
+
+func (h *webSocketHub) submitMessage(message *Message) {
+	switch message.Priority {
+	case SlowMessage:
+		h.slowQueue <- message
+	case NormalMessage:
+		h.normalQueue <- message
+	case FastMessage:
+		h.fastQueue <- message
+	default:
+		h.sendMessage(message)
+	}
+}
+
+func (h *webSocketHub) slowQueueHandler(ctx context.Context) {
+	for message := range h.slowQueue {
+		l := len(message.Data)
+		err := util.SlowQueueLimiter.WaitN(ctx, l)
+		if err != nil {
+			common.Log.Error("slowQueueLimiter waitN %d failed: %s", l, err)
+		}
+		h.sendMessage(message)
+	}
+}
+
+func (h *webSocketHub) normalQueueHandler(ctx context.Context) {
+	for message := range h.normalQueue {
+		l := len(message.Data)
+		err := util.NormalQueueLimiter.WaitN(ctx, l)
+		if err != nil {
+			common.Log.Error("normalQueueLimiter waitN %d failed: %s", l, err)
+		}
+		h.sendMessage(message)
+	}
+}
+
+func (h *webSocketHub) fastQueueHandler(ctx context.Context) {
+	for message := range h.fastQueue {
+		l := len(message.Data)
+		err := util.FastQueueLimiter.WaitN(ctx, l)
+		if err != nil {
+			common.Log.Error("fastQueueLimiter waitN %d failed: %s", l, err)
+		}
+		h.sendMessage(message)
+	}
 }
 
 func (h *webSocketHub) HandleMasterMessage(message *Message) {
@@ -186,7 +282,7 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 			command := split[1]
 			if command == "hello" {
 				common.Log.Info("[hello] from master %s", message.Conn.RemoteAddr().String())
-				h.sendMessage(&Message{Conn: message.Conn, Data: []byte("hello from rhyus-golang")})
+				h.submitMessage(&Message{Conn: message.Conn, Data: []byte("hello from rhyus-golang")})
 			} else if strings.HasPrefix(command, "tell") {
 				// 发送文本给指定用户
 				to := strings.Split(command, " ")[1]
@@ -195,7 +291,7 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 				h.clients.Range(func(key, value any) bool {
 					client := value.(*activeClient)
 					if client.UserInfo.UserName == to {
-						h.sendMessage(&Message{Conn: client.Conn, Data: []byte(content)})
+						h.submitMessage(&Message{Conn: client.Conn, Data: []byte(content)})
 					}
 					return true
 				})
@@ -207,7 +303,7 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 				h.clients.Range(func(key, value any) bool {
 					client := value.(*activeClient)
 					if client.UserInfo.UserName == sender {
-						h.sendMessage(&Message{Conn: client.Conn, Data: []byte(content)})
+						h.submitMessage(&Message{Conn: client.Conn, Data: []byte(content)})
 						num++
 					}
 					return true
@@ -216,7 +312,7 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 				h.clients.Range(func(key, value any) bool {
 					client := value.(*activeClient)
 					if client.UserInfo.UserName != sender {
-						h.sendMessage(&Message{Conn: client.Conn, Data: []byte(content), Delay: 10 * time.Millisecond})
+						h.submitMessage(&Message{Conn: client.Conn, Data: []byte(content), Priority: NormalMessage, Delay: 10 * time.Millisecond})
 						num++
 					}
 					return true
@@ -228,7 +324,7 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 				num := 0
 				h.clients.Range(func(key, value any) bool {
 					client := value.(*activeClient)
-					h.sendMessage(&Message{Conn: client.Conn, Data: []byte(content), Delay: 10 * time.Millisecond})
+					h.submitMessage(&Message{Conn: client.Conn, Data: []byte(content), Priority: FastMessage, Delay: 10 * time.Millisecond})
 					num++
 					return true
 				})
@@ -239,7 +335,7 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 				num := 0
 				h.clients.Range(func(key, value any) bool {
 					client := value.(*activeClient)
-					h.sendMessage(&Message{Conn: client.Conn, Data: []byte(content), Delay: 100 * time.Millisecond})
+					h.submitMessage(&Message{Conn: client.Conn, Data: []byte(content), Priority: SlowMessage, Delay: 100 * time.Millisecond})
 					num++
 					return true
 				})
@@ -259,14 +355,14 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 				if len(onlineUsers) == 0 {
 					result = []byte("[]")
 				}
-				common.Log.Info(" ---> master %s: %s", message.Conn.RemoteAddr().String(), string(message.Data))
-				h.sendMessage(&Message{Conn: message.Conn, Data: result})
+				common.Log.Debug(" ---> master %s: %s", message.Conn.RemoteAddr().String(), string(message.Data))
+				h.submitMessage(&Message{Conn: message.Conn, Data: result})
 			} else if strings.HasPrefix(command, "push") {
 				content := strings.ReplaceAll(command, "push ", "")
 				common.Log.Info("[push]: %s", content)
 				h.AllOnlineUsers = content
-				common.Log.Info(" ---> master %s: %s", message.Conn.RemoteAddr().String(), string(message.Data))
-				h.sendMessage(&Message{Conn: message.Conn, Data: []byte("OK")})
+				common.Log.Debug(" ---> master %s: %s", message.Conn.RemoteAddr().String(), string(message.Data))
+				h.submitMessage(&Message{Conn: message.Conn, Data: []byte("OK")})
 			} else if strings.HasPrefix(command, "kick") {
 				userName := strings.ReplaceAll(command, "kick ", "")
 				common.Log.Info("[kick]: %s", userName)
@@ -284,7 +380,7 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 					conn := key.(*websocket.Conn)
 					client := value.(*activeClient)
 					if client.LastActive.Add(time.Hour * 6).Before(time.Now()) {
-						common.Log.Info("clear: %s", client.UserInfo.UserName)
+						common.Log.Debug("clear: %s", client.UserInfo.UserName)
 						data[client.UserInfo.UserName] = time.Now().Hour() - client.LastActive.Hour()
 						h.ClientUnregister(conn)
 					}
@@ -296,8 +392,8 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 					common.Log.Error("marshal clear result failed: %s", err)
 				}
 				common.Log.Info("[clear]: number %d list %s", len(data), string(result))
-				common.Log.Info(" ---> master %s: %s", message.Conn.RemoteAddr().String(), result)
-				h.sendMessage(&Message{Conn: message.Conn, Data: result})
+				common.Log.Debug(" ---> master %s: %s", message.Conn.RemoteAddr().String(), result)
+				h.submitMessage(&Message{Conn: message.Conn, Data: result})
 			}
 		}
 	}

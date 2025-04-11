@@ -25,8 +25,13 @@ type AppConf struct {
 	SessionGlobalLimiter          int   `json:"sessionGlobalLimiter,omitempty"`
 	KeepaliveTime                 int64 `json:"keepaliveTime,omitempty"`
 
-	GoMaxProcs int    `json:"goMaxProcs,omitempty"`
-	LogLevel   string `json:"logLevel,omitempty"`
+	FastQueueThreadNum   int `json:"fastQueueThreadNum,omitempty"`
+	NormalQueueThreadNum int `json:"normalQueueThreadNum,omitempty"`
+	SlowQueueThreadNum   int `json:"slowQueueThreadNum,omitempty"`
+
+	MaxBandwidth int    `json:"maxBandwidth,omitempty"`
+	GoMaxProcs   int    `json:"goMaxProcs,omitempty"`
+	LogLevel     string `json:"logLevel,omitempty"`
 
 	m *sync.Mutex
 }
@@ -73,6 +78,11 @@ func init() {
 	sessionGlobalLimiter := flag.Int("sessionGlobalLimiter", 120, "session global limiter")
 	keepaliveTime := flag.Int64("keepaliveTime", 2, "keepalive time of the websocket connection")
 
+	fastQueueThreadNum := flag.Int("fastQueueThreadNum", 3, "fast queue thread number")
+	normalQueueThreadNum := flag.Int("normalQueueThreadNum", 1, "normal queue thread number")
+	slowQueueThreadNum := flag.Int("slowQueueThreadNum", 2, "slow queue thread number")
+
+	maxBandwidth := flag.Int("maxBandwidth", 10240, "max bandwidth (unit kb/s)")
 	goMaxProcs := flag.Int("goMaxProcs", runtime.NumCPU(), "go max procs")
 	logLevel := flag.String("logLevel", "info", "log level")
 	flag.Parse()
@@ -101,8 +111,13 @@ func init() {
 		SessionGlobalLimiter:          *sessionGlobalLimiter,
 		KeepaliveTime:                 *keepaliveTime,
 
-		GoMaxProcs: *goMaxProcs,
-		m:          &sync.Mutex{},
+		FastQueueThreadNum:   *fastQueueThreadNum,
+		NormalQueueThreadNum: *normalQueueThreadNum,
+		SlowQueueThreadNum:   *slowQueueThreadNum,
+
+		MaxBandwidth: *maxBandwidth,
+		GoMaxProcs:   *goMaxProcs,
+		m:            &sync.Mutex{},
 	}
 	ConfigPath = filepath.Join(workSpace, "conf.json")
 	if common.File.IsExist(ConfigPath) {
