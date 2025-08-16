@@ -6,6 +6,9 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/lesismal/nbio v1.6.2
+	github.com/orcaman/concurrent-map/v2 v2.0.1
+	github.com/panjf2000/ants/v2 v2.11.3
+	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/sync v0.11.0
 	golang.org/x/time v0.11.0
 )

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/lesismal/nbio/nbhttp/websocket"
+	cmap "github.com/orcaman/concurrent-map/v2"
 	"golang.org/x/time/rate"
 	"rhyus-golang/common"
 	sync2 "rhyus-golang/common/sync"
@@ -27,9 +28,8 @@ type webSocketHub struct {
 	fastQueue            chan *Message
 	normalQueue          chan *Message
 	slowQueue            chan *Message
-	AllOnlineUsers       string           // 所有在线用户
-	localOnlineUsernames map[string]int64 // 本地在线用户名
-	mu                   sync.Mutex       // 保护 localOnlineUsernames 的并发安全
+	AllOnlineUsers       string                            // 所有在线用户
+	localOnlineUsernames cmap.ConcurrentMap[string, int64] // 本地在线用户名
 }
 
 type activeMaster struct {
@@ -42,7 +42,7 @@ type activeClient struct {
 	LastActive time.Time
 }
 
-func init() {
+func InitTasks() {
 	Hub = &webSocketHub{
 		masters:              sync.Map{}, // key:*websocket.Conn value:*activeMaster
 		masterNum:            0,
@@ -51,8 +51,8 @@ func init() {
 		fastQueue:            make(chan *Message, 1024),
 		normalQueue:          make(chan *Message, 1024),
 		slowQueue:            make(chan *Message, 1024),
-		AllOnlineUsers:       "{}",                   // 所有在线用户
-		localOnlineUsernames: make(map[string]int64), // key:username value:true
+		AllOnlineUsers:       "{}",              // 所有在线用户
+		localOnlineUsernames: cmap.New[int64](), // key:username value:count
 	}
 
 	pool := sync2.NewPool(context.Background())
@@ -60,15 +60,15 @@ func init() {
 		Hub.heartbeat()
 		return nil
 	})
-	pool.SubmitTasks("slowQueue", conf.Conf.SlowQueueThreadNum, func(ctx context.Context) (err error) {
+	pool.SubmitTasks("slowQueue", conf.Conf.Server.SlowQueueThreadNum, func(ctx context.Context) (err error) {
 		Hub.slowQueueHandler(ctx)
 		return nil
 	})
-	pool.SubmitTasks("normalQueue", conf.Conf.NormalQueueThreadNum, func(ctx context.Context) (err error) {
+	pool.SubmitTasks("normalQueue", conf.Conf.Server.NormalQueueThreadNum, func(ctx context.Context) (err error) {
 		Hub.normalQueueHandler(ctx)
 		return nil
 	})
-	pool.SubmitTasks("fastQueue", conf.Conf.FastQueueThreadNum, func(ctx context.Context) (err error) {
+	pool.SubmitTasks("fastQueue", conf.Conf.Server.FastQueueThreadNum, func(ctx context.Context) (err error) {
 		Hub.fastQueueHandler(ctx)
 		return nil
 	})
@@ -94,16 +94,16 @@ func (h *webSocketHub) heartbeat() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		//h.masters.Range(func(key, value any) bool {
+		// h.masters.Range(func(key, value any) bool {
 		//	master := value.(*activeMaster)
 		//	h.sendMessage(&Message{Conn: master.Conn, Data: []byte("heartbeat")})
 		//	return true
-		//})
-		//h.clients.Range(func(key, value any) bool {
+		// })
+		// h.clients.Range(func(key, value any) bool {
 		//	client := value.(*activeClient)
 		//	h.sendMessage(&Message{Conn: client.Conn, Data: []byte("heartbeat")})
 		//	return true
-		//})
+		// })
 		common.Log.Info("active master: %d active client: %d", atomic.LoadInt64(&h.masterNum), atomic.LoadInt64(&h.clientNum))
 	}
 }
@@ -153,17 +153,15 @@ func (h *webSocketHub) ClientRegister(conn *websocket.Conn, userInfo *model.User
 	}
 	h.clients.LoadOrStore(conn, client)
 	common.Log.Info("client %s has joined: %s", userInfo.UserName, conn.RemoteAddr().String())
-	h.mu.Lock()
-	count := h.localOnlineUsernames[userInfo.UserName]
-	h.localOnlineUsernames[userInfo.UserName] = count + 1
-	h.mu.Unlock()
+	count, _ := h.localOnlineUsernames.Get(userInfo.UserName)
+	h.localOnlineUsernames.Set(userInfo.UserName, count+1)
 	atomic.AddInt64(&h.clientNum, 1)
 
 	if count < 1 {
-		util.PostMessageToMaster(conf.Conf.AdminKey, "join", userInfo.UserName)
+		util.PostMessageToMaster(conf.Conf.Server.AdminKey, "join", userInfo.UserName)
 	}
 	// 用户连接数过多则关闭最早的连接
-	if count > conf.Conf.SessionMaxConnection {
+	if count > conf.Conf.Server.SessionMaxConnection {
 		common.Log.Info("client %s has too many connections: %d", userInfo.UserName, count)
 		firstClient := client
 		h.clients.Range(func(key, value any) bool {
@@ -201,13 +199,11 @@ func (h *webSocketHub) ClientUnregister(conn *websocket.Conn) {
 		c := client.(*activeClient)
 		userInfo := c.UserInfo
 		common.Log.Info("client %s has leaved: %s loginTime: %s", userInfo.UserName, conn.RemoteAddr().String(), c.LastActive.Format("2006-01-02 15:04:05"))
-		h.mu.Lock()
-		count := h.localOnlineUsernames[userInfo.UserName]
-		h.localOnlineUsernames[userInfo.UserName] = count - 1
-		h.mu.Unlock()
+		count, _ := h.localOnlineUsernames.Get(userInfo.UserName)
+		h.localOnlineUsernames.Set(userInfo.UserName, count-1)
 		atomic.AddInt64(&h.clientNum, -1)
 		if count < 1 {
-			util.PostMessageToMaster(conf.Conf.AdminKey, "leave", userInfo.UserName)
+			util.PostMessageToMaster(conf.Conf.Server.AdminKey, "leave", userInfo.UserName)
 		}
 	}
 	err := conn.Close()
@@ -278,7 +274,7 @@ func (h *webSocketHub) HandleMasterMessage(message *Message) {
 	msg := string(message.Data)
 	if strings.Contains(msg, ":::") {
 		split := strings.SplitN(msg, ":::", 2)
-		if len(split) == 2 && split[0] == conf.Conf.AdminKey {
+		if len(split) == 2 && split[0] == conf.Conf.Server.AdminKey {
 			command := split[1]
 			if command == "hello" {
 				common.Log.Info("[hello] from master %s", message.Conn.RemoteAddr().String())

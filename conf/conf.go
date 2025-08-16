@@ -1,155 +1,86 @@
 package conf
 
 import (
-	"encoding/json"
-	"flag"
+	"gopkg.in/yaml.v3"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
-	"rhyus-golang/common"
-	"runtime"
-	"sync"
 )
 
-type AppConf struct {
-	Host  string `json:"host,omitempty"`
-	Port  int    `json:"port,omitempty"`
-	Pprof *Pprof `json:"pprof,omitempty"`
-	Ssl   *Ssl   `json:"ssl,omitempty"`
+var Conf *Config
 
-	MasterUrl string `json:"masterUrl,omitempty"`
-	AdminKey  string `json:"adminKey,omitempty"`
+type Config struct {
+	Server struct {
+		Host  string `yaml:"host"`
+		Port  int    `yaml:"port"`
+		Pprof struct {
+			Enable     bool `yaml:"enable"`
+			PporfPort  int  `yaml:"pporfPort"`
+			MaxFile    int  `yaml:"maxFile"`
+			SampleTime int  `yaml:"sampleTime"`
+		} `yaml:"pprof"`
+		Ssl struct {
+			Enabled  bool   `yaml:"enabled"`
+			CertPath string `yaml:"certPath"`
+			KeyPath  string `yaml:"keyPath"`
+		} `yaml:"ssl"`
 
-	SessionMaxConnection          int64 `json:"sessionMaxConnection,omitempty"`
-	SessionApikeyLimiter          int   `json:"sessionApikeyLimiter,omitempty"`
-	SessionApikeyLimiterCacheSize int   `json:"sessionApikeyLimiterCacheSize,omitempty"`
-	SessionGlobalLimiter          int   `json:"sessionGlobalLimiter,omitempty"`
-	KeepaliveTime                 int64 `json:"keepaliveTime,omitempty"`
+		MasterUrl string `yaml:"masterUrl"`
+		AdminKey  string `yaml:"adminKey"`
 
-	FastQueueThreadNum   int `json:"fastQueueThreadNum,omitempty"`
-	NormalQueueThreadNum int `json:"normalQueueThreadNum,omitempty"`
-	SlowQueueThreadNum   int `json:"slowQueueThreadNum,omitempty"`
+		SessionMaxConnection          int64 `yaml:"sessionMaxConnection"`
+		SessionApikeyLimiter          int   `yaml:"sessionApikeyLimiter"`
+		SessionApikeyLimiterCacheSize int   `yaml:"sessionApikeyLimiterCacheSize"`
+		SessionGlobalLimiter          int   `yaml:"sessionGlobalLimiter"`
+		KeepaliveTime                 int64 `yaml:"keepaliveTime"`
 
-	MaxBandwidth int    `json:"maxBandwidth,omitempty"`
-	GoMaxProcs   int    `json:"goMaxProcs,omitempty"`
-	LogLevel     string `json:"logLevel,omitempty"`
+		FastQueueThreadNum   int `yaml:"fastQueueThreadNum"`
+		NormalQueueThreadNum int `yaml:"normalQueueThreadNum"`
+		SlowQueueThreadNum   int `yaml:"slowQueueThreadNum"`
 
-	m *sync.Mutex
+		MaxBandwidth int    `yaml:"maxBandwidth"`
+		GoMaxProcs   int    `yaml:"goMaxProcs"`
+		LogLevel     string `yaml:"logLevel"`
+
+		TimewheelInterval int `yaml:"timewheelInterval"`
+		TimewheelSlotNums int `yaml:"timewheelSlotNums"`
+		PoolSize          int `yaml:"poolSize"`
+		MaxPoolSize       int `yaml:"maxPoolSize"`
+	} `yaml:"server"`
 }
 
-type Ssl struct {
-	Enabled  bool   `json:"enabled,omitempty"`
-	CertPath string `json:"certPath,omitempty"`
-	KeyPath  string `json:"keyPath,omitempty"`
+func InitConfig() {
+	Conf = &Config{}
+	yamlPath := filepath.Join("config.yaml")
+	if _, err := os.Stat(yamlPath); err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	} else {
+		Conf.loadYAMLConfig(yamlPath)
+	}
 }
 
-type Pprof struct {
-	Enable     bool `json:"enable,omitempty"`
-	PporfPort  int  `json:"pporfPort,omitempty"`
-	MaxFile    int  `json:"maxFile,omitempty"`
-	SampleTime int  `json:"sampleTime,omitempty"`
-}
-
-var Conf *AppConf
-var ConfigPath string
-
-func init() {
-	workSpace, err := os.Getwd()
+// 加载 YAML 配置文件
+func (c *Config) loadYAMLConfig(path string) {
+	file, err := os.Open(path)
 	if err != nil {
-		common.Log.Fatal(common.ExitCodeFileSysErr, "get current directory failed: %s", err)
+		log.Fatalf("Error opening YAML file: %v", err)
 	}
-	host := flag.String("host", "0.0.0.0", "host of the HTTP server")
-	port := flag.Int("port", 10831, "port of the HTTP server")
-
-	pprof := flag.Bool("pprof", true, "enable pprof")
-	pprofPort := flag.Int("pprofPort", 10832, "port of the pprof server")
-	maxFile := flag.Int("maxFile", 6, "max file number of pprof")
-	sampleTime := flag.Int("sampleTime", 10, "sample time of pprof")
-
-	ssl := flag.Bool("ssl", false, "enable SSL")
-	certPath := flag.String("certPath", "./cert.pem", "path of SSL certificate")
-	keyPath := flag.String("keyPath", "./key.pem", "path of SSL key")
-
-	masterUrl := flag.String("masterUrl", "https://fishpi.cn", "master server URL")
-	adminKey := flag.String("adminKey", "123456", "admin key")
-
-	sessionMaxConnection := flag.Int64("sessionMaxConnection", 5, "session max connection")
-	sessionApikeyLimiter := flag.Int("sessionApikeyLimiter", 10, "session apikey limiter")
-	sessionApikeyLimiterCacheSize := flag.Int("sessionApikeyLimiterCacheSize", 256, "session global limiter")
-	sessionGlobalLimiter := flag.Int("sessionGlobalLimiter", 120, "session global limiter")
-	keepaliveTime := flag.Int64("keepaliveTime", 2, "keepalive time of the websocket connection")
-
-	fastQueueThreadNum := flag.Int("fastQueueThreadNum", 3, "fast queue thread number")
-	normalQueueThreadNum := flag.Int("normalQueueThreadNum", 1, "normal queue thread number")
-	slowQueueThreadNum := flag.Int("slowQueueThreadNum", 2, "slow queue thread number")
-
-	maxBandwidth := flag.Int("maxBandwidth", 10240, "max bandwidth (unit kb/s)")
-	goMaxProcs := flag.Int("goMaxProcs", runtime.NumCPU(), "go max procs")
-	logLevel := flag.String("logLevel", "info", "log level")
-	flag.Parse()
-
-	Conf = &AppConf{
-		LogLevel: *logLevel,
-		Host:     *host,
-		Port:     *port,
-		Pprof: &Pprof{
-			Enable:     *pprof,
-			PporfPort:  *pprofPort,
-			MaxFile:    *maxFile,
-			SampleTime: *sampleTime,
-		},
-		Ssl: &Ssl{
-			Enabled:  *ssl,
-			CertPath: *certPath,
-			KeyPath:  *keyPath,
-		},
-		MasterUrl: *masterUrl,
-		AdminKey:  *adminKey,
-
-		SessionMaxConnection:          *sessionMaxConnection,
-		SessionApikeyLimiter:          *sessionApikeyLimiter,
-		SessionApikeyLimiterCacheSize: *sessionApikeyLimiterCacheSize,
-		SessionGlobalLimiter:          *sessionGlobalLimiter,
-		KeepaliveTime:                 *keepaliveTime,
-
-		FastQueueThreadNum:   *fastQueueThreadNum,
-		NormalQueueThreadNum: *normalQueueThreadNum,
-		SlowQueueThreadNum:   *slowQueueThreadNum,
-
-		MaxBandwidth: *maxBandwidth,
-		GoMaxProcs:   *goMaxProcs,
-		m:            &sync.Mutex{},
-	}
-	ConfigPath = filepath.Join(workSpace, "conf.json")
-	if common.File.IsExist(ConfigPath) {
-		if data, err := os.ReadFile(ConfigPath); nil != err {
-			common.Log.Error("load conf [%s] failed: %s", ConfigPath, err)
-		} else {
-			if err = json.Unmarshal(data, Conf); err != nil {
-				common.Log.Error("parse conf [%s] failed: %s", ConfigPath, err)
-			} else {
-				common.Log.Info("loaded conf [%s]", ConfigPath)
-			}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Fatalf("Error closing YAML file: %v", err)
 		}
+	}(file)
+
+	// 读取文件内容
+	data, err := io.ReadAll(file)
+	if err != nil {
+		log.Fatalf("Error reading YAML file: %v", err)
 	}
-	runtime.GOMAXPROCS(Conf.GoMaxProcs)
-	common.Log.SetLogLevel(Conf.LogLevel)
-	common.Log.Info("log level: [%s] save path: [%s]", Conf.LogLevel, common.LogPath)
-	marshal, _ := json.Marshal(Conf)
-	common.Log.Info("conf: %s", marshal)
-	Conf.Save()
-}
 
-func (conf *AppConf) Save() {
-	conf.m.Lock()
-	defer conf.m.Unlock()
-
-	data, _ := json.MarshalIndent(conf, "", "  ")
-	if err := common.File.WriteFileSafer(ConfigPath, data, 0644); nil != err {
-		common.Log.Error("write conf [%s] failed: %s", ConfigPath, err)
-		return
+	err = yaml.Unmarshal(data, c)
+	if err != nil {
+		log.Fatalf("Error parsing YAML file: %v", err)
 	}
-}
-
-func (conf *AppConf) Close() {
-	conf.Save()
 }

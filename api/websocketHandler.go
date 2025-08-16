@@ -12,26 +12,32 @@ import (
 	"time"
 )
 
-var masterUpgrade *websocket.Upgrader
-var clientUpgrade *websocket.Upgrader
-
-func init() {
-	masterUpgrade = websocket.NewUpgrader()
-	masterUpgrade.CheckOrigin = func(r *http.Request) bool {
-		return true
-	}
-	clientUpgrade = websocket.NewUpgrader()
-	clientUpgrade.CheckOrigin = func(r *http.Request) bool {
-		return true
-	}
-}
-
 // ChatroomWebSocket 将连接加入在线列表
 func ChatroomWebSocket(c *gin.Context) {
 	var err error
-	if util.GetApiKey(c) == conf.Conf.AdminKey {
+
+	masterUpgrade := websocket.NewUpgrader()
+	masterUpgrade.CheckOrigin = func(r *http.Request) bool {
+		return true
+	}
+	masterUpgrade.SetPingHandler(func(conn *websocket.Conn, s string) {
+		if err := conn.WriteMessage(websocket.PongMessage, nil); err != nil {
+			common.Log.Error("write pong message error: %v", err)
+		}
+	})
+	clientUpgrade := websocket.NewUpgrader()
+	clientUpgrade.CheckOrigin = func(r *http.Request) bool {
+		return true
+	}
+	clientUpgrade.SetPingHandler(func(conn *websocket.Conn, s string) {
+		if err := conn.WriteMessage(websocket.PongMessage, nil); err != nil {
+			common.Log.Error("write pong message error: %v", err)
+		}
+	})
+
+	if util.GetApiKey(c) == conf.Conf.Server.AdminKey {
 		// 服务端连接
-		masterUpgrade.KeepaliveTime = time.Minute * time.Duration(conf.Conf.KeepaliveTime)
+		masterUpgrade.KeepaliveTime = time.Minute * time.Duration(conf.Conf.Server.KeepaliveTime)
 		masterUpgrade.OnOpen(func(conn *websocket.Conn) {
 			service.Hub.MasterRegister(conn)
 		})
@@ -45,7 +51,7 @@ func ChatroomWebSocket(c *gin.Context) {
 		_, err = masterUpgrade.Upgrade(c.Writer, c.Request, nil)
 	} else {
 		// 客户端连接
-		clientUpgrade.KeepaliveTime = time.Minute * time.Duration(conf.Conf.KeepaliveTime)
+		clientUpgrade.KeepaliveTime = time.Minute * time.Duration(conf.Conf.Server.KeepaliveTime)
 		clientUpgrade.OnOpen(func(conn *websocket.Conn) {
 			info, _ := c.Get("userInfo")
 			userInfo := info.(*model.UserInfo)

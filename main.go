@@ -11,11 +11,18 @@ import (
 	"rhyus-golang/conf"
 	"rhyus-golang/middlewares"
 	"rhyus-golang/service"
+	"rhyus-golang/util"
 	"strconv"
 	"time"
 )
 
 func main() {
+
+	conf.InitConfig()
+	// service.NewTimeWheel().Start()
+	util.InitLimiter()
+	service.InitTasks()
+
 	service.StartPProfServe()
 
 	gin.SetMode(gin.ReleaseMode)
@@ -32,7 +39,7 @@ func main() {
 
 	api.ServeAPI(ginServer)
 
-	addr := conf.Conf.Host + ":" + strconv.Itoa(conf.Conf.Port)
+	addr := conf.Conf.Server.Host + ":" + strconv.Itoa(conf.Conf.Server.Port)
 	engine := nbhttp.NewEngine(nbhttp.Config{
 		Network: "tcp",
 		Addrs:   []string{addr},

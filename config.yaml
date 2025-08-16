@@ -1,0 +1,28 @@
+server:
+  host: 0.0.0.0
+  port: 10831
+  pprof:
+    enable: true
+    pporfPort: 10832
+    maxFile: 6
+    sampleTime: 10
+  ssl:
+    certPath: ./cert.pem
+    keyPath: ./key.pem
+  masterUrl: http:127.0.0.1:8080
+  adminKey: "123456"
+  sessionMaxConnection: 5
+  sessionApikeyLimiter: 10
+  sessionApikeyLimiterCacheSize: 256
+  sessionGlobalLimiter: 120
+  keepaliveTime: 2
+  fastQueueThreadNum: 3
+  normalQueueThreadNum: 1
+  slowQueueThreadNum: 2
+  maxBandwidth: 10240
+  goMaxProcs: 12
+  logLevel: info
+  timewheelInterval: 10 # ms
+  timewheelSlotNums: 60000 # 10min
+  poolSize: 256
+  maxPoolSize: 8192

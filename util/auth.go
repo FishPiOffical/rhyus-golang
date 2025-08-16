@@ -18,7 +18,7 @@ func GetApiKey(c *gin.Context) string {
 
 func GetUserInfo(apiKey string) *model.UserInfo {
 	var result model.Result[model.UserInfo]
-	resp, err := http.Get(conf.Conf.MasterUrl + "/api/user?apiKey=" + apiKey)
+	resp, err := http.Get(conf.Conf.Server.MasterUrl + "/api/user?apiKey=" + apiKey)
 	if err != nil {
 		common.Log.Error("get user info failed: %s", err)
 		return nil
@@ -61,14 +61,14 @@ func PostMessageToMaster(adminKey string, msg string, data string) {
 	requestData := chatroomNodePush{
 		Msg:      msg,
 		Data:     data,
-		AdminKey: conf.Conf.AdminKey,
+		AdminKey: conf.Conf.Server.AdminKey,
 	}
 	jsonData, err := json.Marshal(requestData)
 	if err != nil {
 		common.Log.Error("parse response failed: %s", err)
 		return
 	}
-	resp, err := http.Post(conf.Conf.MasterUrl+"/chat-room/node/push", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post(conf.Conf.Server.MasterUrl+"/chat-room/node/push", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		common.Log.Error("post message to master failed: %s", err)
 		return

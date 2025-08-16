@@ -65,7 +65,7 @@ func Authorize(c *gin.Context) {
 	if apiKey == "" {
 		model.Forbidden(c)
 		return
-	} else if apiKey != conf.Conf.AdminKey {
+	} else if apiKey != conf.Conf.Server.AdminKey {
 		userInfo := util.GetUserInfo(apiKey)
 		if userInfo == nil {
 			model.Forbidden(c)
@@ -79,7 +79,7 @@ func Authorize(c *gin.Context) {
 
 func Limiter(c *gin.Context) {
 	apiKey := util.GetApiKey(c)
-	if apiKey != conf.Conf.AdminKey {
+	if apiKey != conf.Conf.Server.AdminKey {
 		if !util.GlobalLimiter.Allow() || !util.GetApiKeyLimiter(apiKey).Allow() {
 			common.Log.Info("apiKey has too many request: %s", apiKey)
 			model.TooManyRequests(c)

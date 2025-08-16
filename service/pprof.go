@@ -16,7 +16,7 @@ import (
 )
 
 func StartPProfServe() {
-	if conf.Conf.Pprof.Enable {
+	if conf.Conf.Server.Pprof.Enable {
 		// 启动 HTTP 服务，暴露 pprof 信息
 		mux := http.NewServeMux()
 		mux.HandleFunc("/debug/pprof/", netpporf.Index)
@@ -25,8 +25,8 @@ func StartPProfServe() {
 		mux.HandleFunc("/debug/pprof/symbol", netpporf.Symbol)
 		mux.HandleFunc("/debug/pprof/trace", netpporf.Trace)
 		go func() {
-			err := http.ListenAndServe(":"+strconv.Itoa(conf.Conf.Pprof.PporfPort), mux)
-			common.Log.Info("pprof server started on :%d", conf.Conf.Pprof.PporfPort)
+			err := http.ListenAndServe(":"+strconv.Itoa(conf.Conf.Server.Pprof.PporfPort), mux)
+			common.Log.Info("pprof server started on :%d", conf.Conf.Server.Pprof.PporfPort)
 			if err != nil {
 				common.Log.Fatal(common.ExitCodeUnavailablePort, "serve start failed: %s", err)
 			}
@@ -35,7 +35,7 @@ func StartPProfServe() {
 		// 定期保存各类 pprof 信息
 		go func() {
 			for {
-				time.Sleep(time.Duration(conf.Conf.Pprof.SampleTime) * time.Minute)
+				time.Sleep(time.Duration(conf.Conf.Server.Pprof.SampleTime) * time.Minute)
 				savePProf("heap")
 				savePProf("cpu")
 				savePProf("goroutine")
@@ -43,7 +43,7 @@ func StartPProfServe() {
 				savePProf("allocs")
 				savePProf("block")
 				savePProf("mutex")
-				keepRecentFiles(conf.Conf.Pprof.MaxFile * 7)
+				keepRecentFiles(conf.Conf.Server.Pprof.MaxFile * 7)
 			}
 		}()
 	}
